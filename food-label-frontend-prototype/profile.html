@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人主页 - FoodGuard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Inter', system-ui, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex flex-col">
+
+  <!-- Navigation -->
+  <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+            </svg>
+          </div>
+          <span class="text-xl font-bold text-slate-900">FoodGuard</span>
+        </div>
+        <div class="hidden md:flex items-center gap-6">
+          <a href="home.html" class="text-slate-600 hover:text-emerald-600 transition-colors font-medium text-sm">首页</a>
+          <a href="index.html" class="text-slate-600 hover:text-emerald-600 transition-colors font-medium text-sm">分析报告</a>
+          <a href="history.html" class="text-slate-600 hover:text-emerald-600 transition-colors font-medium text-sm">历史记录</a>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center border border-emerald-200 cursor-pointer">
+            <span class="text-sm font-bold text-emerald-700">李</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl mx-auto w-full px-6 py-8 flex flex-col md:flex-row gap-8">
+    
+    <!-- Sidebar / Profile Info -->
+    <div class="w-full md:w-80 flex flex-col gap-6">
+      
+      <!-- User Card -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm text-center">
+        <div class="w-24 h-24 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full mx-auto flex items-center justify-center mb-4 border-4 border-white shadow-md relative group">
+          <span class="text-3xl font-bold text-emerald-600">李</span>
+          <button class="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-colors shadow-sm opacity-0 group-hover:opacity-100">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </button>
+        </div>
+        <h2 class="text-xl font-bold text-slate-900 mb-1">李雷</h2>
+        <p class="text-sm text-slate-500">lilei@example.com</p>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h3 class="font-bold text-slate-900 mb-4">使用数据</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-slate-50 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-slate-900 mb-1">124</div>
+            <div class="text-xs text-slate-500">累计分析 (次)</div>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-emerald-600 mb-1">85</div>
+            <div class="text-xs text-slate-500">平均健康分</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account Security -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-200 bg-slate-50/50">
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            账号安全与操作
+          </h2>
+        </div>
+        <div class="p-5 space-y-5">
+          <!-- Change Password -->
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900 mb-1">修改密码</h3>
+            <p class="text-xs text-slate-500 mb-3">定期修改密码以保护账号安全。</p>
+            <button class="w-full px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 hover:text-emerald-600 transition-colors shadow-sm">
+              修改密码
+            </button>
+          </div>
+          
+          <div class="h-px bg-slate-100"></div>
+
+          <!-- Logout -->
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900 mb-1">退出登录</h3>
+            <p class="text-xs text-slate-500 mb-3">退出当前设备上的账号。</p>
+            <button class="w-full px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">
+              退出登录
+            </button>
+          </div>
+
+          <div class="h-px bg-slate-100"></div>
+
+          <!-- Delete Account -->
+          <div>
+            <h3 class="text-sm font-semibold text-red-600 mb-1">注销账号</h3>
+            <p class="text-xs text-slate-500 mb-3">永久删除账号及所有记录，不可恢复。</p>
+            <button class="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-100 text-sm font-medium rounded-xl hover:bg-red-600 hover:text-white transition-colors shadow-sm">
+              注销账号
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Main Settings Area -->
+    <div class="flex-1 flex flex-col gap-6">
+      
+      <!-- Account Settings -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            账号设置
+          </h2>
+          <p class="text-sm text-slate-500 mt-1">管理您的基本信息和密码</p>
+        </div>
+        <div class="p-6 space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">昵称</label>
+              <input type="text" value="李雷" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">邮箱账号</label>
+              <input type="email" value="lilei@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all" disabled>
+            </div>
+          </div>
+          <div class="flex justify-end">
+            <button class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">保存修改</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Health Preferences -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            默认健康偏好
+          </h2>
+          <p class="text-sm text-slate-500 mt-1">设置后，每次分析都会默认带入这些身体特征参数，为您提供更精准的预警。</p>
+        </div>
+        <div class="p-6 space-y-8">
+          
+          <!-- Focus Groups -->
+          <div>
+            <div class="flex items-center gap-2 mb-5">
+              <div class="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
+              <h3 class="text-base font-bold text-slate-800">常驻关注人群</h3>
+              <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">多选</span>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              
+              <!-- Focus Group Item: 自己/成年人 -->
+              <label class="cursor-pointer group">
+                <input type="checkbox" class="peer sr-only">
+                <div class="flex items-center justify-center px-5 py-2.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all duration-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2">
+                  <span class="text-sm font-medium text-slate-600 peer-checked:text-white transition-colors">自己/成年人</span>
+                </div>
+              </label>
+
+              <!-- Focus Group Item: 儿童 -->
+              <label class="cursor-pointer group">
+                <input type="checkbox" class="peer sr-only">
+                <div class="flex items-center justify-center px-5 py-2.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all duration-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2">
+                  <span class="text-sm font-medium text-slate-600 peer-checked:text-white transition-colors">儿童</span>
+                </div>
+              </label>
+
+              <!-- Focus Group Item: 老年人 -->
+              <label class="cursor-pointer group">
+                <input type="checkbox" class="peer sr-only" checked>
+                <div class="flex items-center justify-center px-5 py-2.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all duration-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2">
+                  <span class="text-sm font-medium text-slate-600 peer-checked:text-white transition-colors">老年人</span>
+                </div>
+              </label>
+
+              <!-- Focus Group Item: 孕妇 -->
+              <label class="cursor-pointer group">
+                <input type="checkbox" class="peer sr-only">
+                <div class="flex items-center justify-center px-5 py-2.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all duration-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2">
+                  <span class="text-sm font-medium text-slate-600 peer-checked:text-white transition-colors">孕妇</span>
+                </div>
+              </label>
+
+              <!-- Focus Group Item: 健身/减脂 -->
+              <label class="cursor-pointer group">
+                <input type="checkbox" class="peer sr-only">
+                <div class="flex items-center justify-center px-5 py-2.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all duration-200 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2">
+                  <span class="text-sm font-medium text-slate-600 peer-checked:text-white transition-colors">健身/减脂</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="h-px bg-slate-100"></div>
+
+          <!-- Special Health Concerns -->
+          <div id="health-concerns">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <div class="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
+                <h3 class="text-base font-bold text-slate-800">个人特殊健康状况</h3>
+                <span class="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">可多选</span>
+              </div>
+              <div id="concerns-count" class="shrink-0 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">已选 0 项</div>
+            </div>
+            <p class="text-sm text-slate-500 mb-4">用于在报告里自动加粗与你相关的风险点，减少你逐条筛查的成本。</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Item: 糖尿病 / 控糖需求 -->
+              <label class="block cursor-pointer select-none focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:ring-offset-2 focus-within:ring-offset-white rounded-2xl h-full">
+                <input type="checkbox" class="peer sr-only">
+                <div class="flex flex-col h-full p-5 rounded-2xl bg-white border-2 border-slate-200 hover:border-emerald-300 transition-all duration-200 peer-checked:bg-emerald-50/40 peer-checked:border-emerald-500">
+                  <div class="text-base font-bold text-slate-800 leading-tight mb-3">糖尿病 / 控糖需求</div>
+                  <div class="text-[13px] text-slate-500 leading-relaxed">系统将对游离糖、隐形糖和升糖指数高的配料进行强预警。</div>
+                </div>
+              </label>
+
+              <!-- Item: 高血压 / 控钠需求 -->
+              <label class="block cursor-pointer select-none focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:ring-offset-2 focus-within:ring-offset-white rounded-2xl h-full">
+                <input type="checkbox" class="peer sr-only" checked>
+                <div class="flex flex-col h-full p-5 rounded-2xl bg-white border-2 border-slate-200 hover:border-emerald-300 transition-all duration-200 peer-checked:bg-emerald-50/40 peer-checked:border-emerald-500">
+                  <div class="text-base font-bold text-slate-800 leading-tight mb-3">高血压 / 控钠需求</div>
+                  <div class="text-[13px] text-slate-500 leading-relaxed">系统将严格计算钠含量占比，并预警高钠配料。</div>
+                </div>
+              </label>
+
+              <!-- Item: 高尿酸 / 痛风 -->
+              <label class="block cursor-pointer select-none focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:ring-offset-2 focus-within:ring-offset-white rounded-2xl h-full">
+                <input type="checkbox" class="peer sr-only">
+                <div class="flex flex-col h-full p-5 rounded-2xl bg-white border-2 border-slate-200 hover:border-emerald-300 transition-all duration-200 peer-checked:bg-emerald-50/40 peer-checked:border-emerald-500">
+                  <div class="text-base font-bold text-slate-800 leading-tight mb-3">高尿酸 / 痛风</div>
+                  <div class="text-[13px] text-slate-500 leading-relaxed">预警高嘌呤食材及果葡糖浆等容易引发尿酸升高的成分。</div>
+                </div>
+              </label>
+
+              <!-- Item: 食物过敏 -->
+              <label class="block cursor-pointer select-none focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:ring-offset-2 focus-within:ring-offset-white rounded-2xl h-full">
+                <input type="checkbox" id="allergy-checkbox" class="peer sr-only">
+                <div class="flex flex-col h-full p-5 rounded-2xl bg-white border-2 border-slate-200 hover:border-emerald-300 transition-all duration-200 peer-checked:bg-emerald-50/40 peer-checked:border-emerald-500">
+                  <div class="text-base font-bold text-slate-800 leading-tight mb-3">食物过敏</div>
+                  <div class="text-[13px] text-slate-500 leading-relaxed">填写过敏源后，报告会优先标记致敏成分。</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Allergy Input Section (Hidden by default, shown when allergy is selected) -->
+          <div id="allergy-input-section" class="hidden mt-6">
+            <div class="p-6 rounded-2xl bg-slate-50 border border-slate-200 relative overflow-hidden">
+              <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+              <label class="block text-sm font-bold text-slate-800 mb-2">请填写您的食物过敏源</label>
+              <p class="text-xs text-slate-500 mb-4">我们将根据您填写的过敏源，在配料表中为您精准排雷。</p>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </div>
+                <input id="allergy-input" type="text" placeholder="如：花生、牛奶、麸质、虾蟹" class="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-400 shadow-sm">
+              </div>
+              <div class="mt-3">
+                <div class="text-[11px] text-slate-500 font-medium">支持使用逗号分隔多个过敏源</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    const allergyCheckbox = document.getElementById('allergy-checkbox');
+    const allergyInput = document.getElementById('allergy-input');
+    const allergyExampleButton = document.getElementById('allergy-example');
+    const concernsSection = document.getElementById('health-concerns');
+    const concernsCount = document.getElementById('concerns-count');
+
+    function syncConcernsCount() {
+      if (!concernsSection || !concernsCount) return;
+      const checkedCount = concernsSection.querySelectorAll('input[type="checkbox"]:checked').length;
+      concernsCount.textContent = `已选 ${checkedCount} 项`;
+    }
+
+    function syncAllergyState() {
+      if (!allergyCheckbox) return;
+      const checked = allergyCheckbox.checked;
+      if (allergyInput) {
+        allergyInput.required = checked;
+      }
+      if (checked) {
+        setTimeout(() => {
+          const inputSection = document.getElementById('allergy-input-section');
+          if (inputSection) {
+            inputSection.classList.remove('hidden');
+            inputSection.classList.add('block');
+            allergyInput && allergyInput.focus();
+          }
+        }, 100);
+      } else {
+        const inputSection = document.getElementById('allergy-input-section');
+        if (inputSection) {
+          inputSection.classList.add('hidden');
+          inputSection.classList.remove('block');
+        }
+      }
+    }
+
+    if (allergyCheckbox) {
+      allergyCheckbox.addEventListener('change', syncAllergyState);
+      syncAllergyState();
+    }
+
+    if (concernsSection) {
+      concernsSection.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        if (target.type !== 'checkbox') return;
+        syncConcernsCount();
+      });
+      syncConcernsCount();
+    }
+  </script>
+</body>
+</html>

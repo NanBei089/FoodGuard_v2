@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+ocr-venv/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Model files
+models_store/
+
+# ChromaDB data
+chroma_data/
+
+# MinIO local data
+minio_data/
+
+# Database
+*.db
+*.sqlite3
+*.sqlite
+
+# Test artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.pytest_cache_local/
+pytest-cache-files-*/
+coverage.xml
+.hypothesis/
+
+# Build
+dist/
+build/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pyre/
+.black_cache/
+
+# Logs
+*.log
+logs/
+celerybeat-schedule
+celerybeat.pid
+
+# System files
+.DS_Store
+Thumbs.db
