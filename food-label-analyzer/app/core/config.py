@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     APP_DEBUG: bool = True
     APP_SECRET_KEY: SecretStr
     API_V1_PREFIX: str = "/api/v1"
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "http://localhost:5173"
     SKIP_STARTUP_CHECKS: bool = False
     HEALTH_CHECK_EXTERNAL: bool = True
 
@@ -159,7 +159,18 @@ class Settings(BaseSettings):
 
     @property
     def allowed_image_types_list(self) -> list[str]:
-        return [item.strip() for item in self.ALLOWED_IMAGE_TYPES.split(",") if item.strip()]
+        return [
+            item.strip() for item in self.ALLOWED_IMAGE_TYPES.split(",") if item.strip()
+        ]
+
+    @property
+    def minio_client_endpoint(self) -> str:
+        endpoint = self.MINIO_ENDPOINT.strip()
+        if endpoint == "localhost":
+            return "127.0.0.1"
+        if endpoint.startswith("localhost:"):
+            return endpoint.replace("localhost", "127.0.0.1", 1)
+        return endpoint
 
     @property
     def cors_origins_list(self) -> list[str]:

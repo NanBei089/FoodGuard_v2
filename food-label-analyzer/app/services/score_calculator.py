@@ -11,7 +11,6 @@ from app.schemas.analysis_data import (
     RAGResults,
 )
 
-
 NRV_THRESHOLDS = {
     "sodium": {"low": 20, "medium": 40, "high": 60, "very_high": 80},
     "sugar": {"low": 10, "medium": 20, "high": 30},
@@ -98,7 +97,11 @@ def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
         elif "膳食纤维" in item.name or "fiber" in name_lower:
             item_map["fiber"] = item
 
-    protein_nrv = _parse_nrv(item_map.get("protein", NutritionItem(name="", value="", unit="")).daily_reference_percent)
+    protein_nrv = _parse_nrv(
+        item_map.get(
+            "protein", NutritionItem(name="", value="", unit="")
+        ).daily_reference_percent
+    )
     if protein_nrv > 0:
         if protein_nrv >= 20:
             result.protein_score = 90.0
@@ -107,7 +110,11 @@ def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
         else:
             result.protein_score = 60.0 + protein_nrv * 3
 
-    fat_nrv = _parse_nrv(item_map.get("fat", NutritionItem(name="", value="", unit="")).daily_reference_percent)
+    fat_nrv = _parse_nrv(
+        item_map.get(
+            "fat", NutritionItem(name="", value="", unit="")
+        ).daily_reference_percent
+    )
     if fat_nrv > 0:
         if fat_nrv <= 20:
             result.fat_score = 100.0
@@ -118,7 +125,11 @@ def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
         else:
             result.fat_score = max(30.0, 65.0 - (fat_nrv - 60) * 1.5)
 
-    carb_nrv = _parse_nrv(item_map.get("carb", NutritionItem(name="", value="", unit="")).daily_reference_percent)
+    carb_nrv = _parse_nrv(
+        item_map.get(
+            "carb", NutritionItem(name="", value="", unit="")
+        ).daily_reference_percent
+    )
     if carb_nrv > 0:
         if 40 <= carb_nrv <= 60:
             result.carb_score = 100.0
@@ -129,7 +140,11 @@ def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
         else:
             result.carb_score = 70.0
 
-    fiber_nrv = _parse_nrv(item_map.get("fiber", NutritionItem(name="", value="", unit="")).daily_reference_percent)
+    fiber_nrv = _parse_nrv(
+        item_map.get(
+            "fiber", NutritionItem(name="", value="", unit="")
+        ).daily_reference_percent
+    )
     if fiber_nrv >= 25:
         result.fiber_score = 100.0
     elif fiber_nrv >= 15:
@@ -168,7 +183,9 @@ def score_sodium(nutrition_data: NutritionData | None) -> float:
             elif nrv <= NRV_THRESHOLDS["sodium"]["very_high"]:
                 return 40.0
             else:
-                return max(10.0, 40.0 - (nrv - NRV_THRESHOLDS["sodium"]["very_high"]) * 2)
+                return max(
+                    10.0, 40.0 - (nrv - NRV_THRESHOLDS["sodium"]["very_high"]) * 2
+                )
 
     return 80.0
 
@@ -179,7 +196,9 @@ def score_sugar(nutrition_data: NutritionData | None) -> float:
 
     for item in nutrition_data.items:
         name_lower = item.name.lower()
-        if ("糖" in item.name and ("总" in item.name or "total" in name_lower)) or "sugar" in name_lower:
+        if (
+            "糖" in item.name and ("总" in item.name or "total" in name_lower)
+        ) or "sugar" in name_lower:
             nrv = _parse_nrv(item.daily_reference_percent)
             if nrv == 0:
                 return 80.0
@@ -200,9 +219,13 @@ def _classify_additive(name: str) -> str:
     name_lower = name.lower()
     if any(k in name_lower for k in ["防腐", "preserv", "山梨", "苯甲", "亚硫酸"]):
         return "preservative"
-    elif any(k in name_lower for k in ["色素", "color", "着色", "胭脂", "柠檬黄", "日落"]):
+    elif any(
+        k in name_lower for k in ["色素", "color", "着色", "胭脂", "柠檬黄", "日落"]
+    ):
         return "color"
-    elif any(k in name_lower for k in ["甜味", "sweetener", "糖精", "阿斯巴", "三氯", "赤藓"]):
+    elif any(
+        k in name_lower for k in ["甜味", "sweetener", "糖精", "阿斯巴", "三氯", "赤藓"]
+    ):
         return "sweetener"
     elif any(k in name_lower for k in ["味精", "增味", "谷氨酸", "肌苷", "呈味核苷"]):
         return "flavor_enhancer"
@@ -230,15 +253,35 @@ def score_additives(ingredients: list[IngredientItem]) -> float:
 
 def score_allergens(ingredients: list[IngredientItem]) -> float:
     allergen_keywords = [
-        "麸质", "小麦", "面筋", "gluten",
-        "乳", "牛奶", "乳制品", "奶酪", "黄油", "奶粉",
-        "大豆", "soy",
-        "鸡蛋", "蛋",
-        "花生", "peanut",
-        "坚果", "杏仁", "核桃", "腰果", "pecan",
-        "芝麻", "sesame",
-        "甲壳", "虾", "蟹", "贝类",
-        "鱼", "fish",
+        "麸质",
+        "小麦",
+        "面筋",
+        "gluten",
+        "乳",
+        "牛奶",
+        "乳制品",
+        "奶酪",
+        "黄油",
+        "奶粉",
+        "大豆",
+        "soy",
+        "鸡蛋",
+        "蛋",
+        "花生",
+        "peanut",
+        "坚果",
+        "杏仁",
+        "核桃",
+        "腰果",
+        "pecan",
+        "芝麻",
+        "sesame",
+        "甲壳",
+        "虾",
+        "蟹",
+        "贝类",
+        "鱼",
+        "fish",
     ]
 
     allergen_count = 0

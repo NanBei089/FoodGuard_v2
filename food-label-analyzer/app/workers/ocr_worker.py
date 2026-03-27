@@ -4,15 +4,16 @@ import json
 import threading
 import time
 from dataclasses import asdict, dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
 
 import requests
 import structlog
+from PIL import Image
 
 from app.core.config import get_settings
 from app.core.errors import OCRServiceError
-
 
 logger = structlog.get_logger(__name__)
 
@@ -135,7 +136,9 @@ class PaddleOCRAPIClient:
             "useSealRecognition": bool(self.config.use_seal_recognition),
             "useTableRecognition": bool(self.config.use_table_recognition),
             "useE2eWiredTableRecModel": bool(self.config.use_e2e_wired_table_rec_model),
-            "useE2eWirelessTableRecModel": bool(self.config.use_e2e_wireless_table_rec_model),
+            "useE2eWirelessTableRecModel": bool(
+                self.config.use_e2e_wireless_table_rec_model
+            ),
             "useFormulaRecognition": bool(self.config.use_formula_recognition),
             "useChartRecognition": bool(self.config.use_chart_recognition),
             "textDetBoxThresh": float(self.config.det_db_box_thresh),
@@ -148,7 +151,9 @@ class PaddleOCRAPIClient:
     def _submit_job(self, image_bytes: bytes, filename: str = "image.jpg") -> str:
         data = {
             "model": self.config.model,
-            "optionalPayload": json.dumps(self._build_optional_payload(), ensure_ascii=False),
+            "optionalPayload": json.dumps(
+                self._build_optional_payload(), ensure_ascii=False
+            ),
         }
         files = {"file": (filename, image_bytes, "application/octet-stream")}
         response = requests.post(
@@ -160,7 +165,9 @@ class PaddleOCRAPIClient:
         )
 
         if response.status_code != 200:
-            raise RuntimeError(f"提交 OCR 任务失败，HTTP {response.status_code}: {response.text}")
+            raise RuntimeError(
+                f"提交 OCR 任务失败，HTTP {response.status_code}: {response.text}"
+            )
 
         try:
             payload = response.json()
@@ -183,7 +190,9 @@ class PaddleOCRAPIClient:
                 timeout=self.config.request_timeout_s,
             )
             if response.status_code != 200:
-                raise RuntimeError(f"轮询 OCR 任务失败，HTTP {response.status_code}: {response.text}")
+                raise RuntimeError(
+                    f"轮询 OCR 任务失败，HTTP {response.status_code}: {response.text}"
+                )
 
             try:
                 payload = response.json()
@@ -195,13 +204,17 @@ class PaddleOCRAPIClient:
             if state == "done":
                 return data
             if state == "failed":
-                raise RuntimeError(f"OCR 任务失败: {data.get('errorMsg', 'unknown error')}")
+                raise RuntimeError(
+                    f"OCR 任务失败: {data.get('errorMsg', 'unknown error')}"
+                )
             if state not in {"pending", "running"}:
                 raise RuntimeError(f"OCR 任务状态异常: {payload}")
 
             time.sleep(self.config.poll_interval_s)
 
-        raise TimeoutError(f"OCR 任务超时，超过 {self.config.poll_timeout_s} 秒仍未完成。job_id={job_id}")
+        raise TimeoutError(
+            f"OCR 任务超时，超过 {self.config.poll_timeout_s} 秒仍未完成。job_id={job_id}"
+        )
 
     def _download_jsonl_results(self, json_url: str) -> list[Any]:
         response = requests.get(json_url, timeout=self.config.request_timeout_s)
@@ -249,6 +262,41 @@ def _ensure_file(path: str | Path) -> Path:
     if not file_path.is_file():
         raise FileNotFoundError(f"图片路径不是有效文件: {file_path}")
     return file_path
+
+
+def _prepare_image_for_remote_ocr(
+    image_bytes: bytes,
+    *,
+    max_side: int = 2200,
+    jpeg_quality: int = 86,
+) -> bytes:
+    try:
+        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    except Exception:
+        return image_bytes
+
+    original_size = image.size
+    processed = image.copy()
+    processed.thumbnail((max_side, max_side))
+
+    output = BytesIO()
+    try:
+        processed.save(output, format="JPEG", quality=jpeg_quality, optimize=True)
+    except Exception:
+        return image_bytes
+
+    optimized = output.getvalue()
+    if not optimized:
+        return image_bytes
+
+    logger.info(
+        "ocr_image_prepared",
+        original_bytes=len(image_bytes),
+        prepared_bytes=len(optimized),
+        original_size=original_size,
+        prepared_size=processed.size,
+    )
+    return optimized if len(optimized) < len(image_bytes) else image_bytes
 
 
 def _coerce_number(value: Any) -> int | float:
@@ -334,7 +382,13 @@ def _extract_from_layout_results(layout_results: list[Any]) -> list[dict[str, An
             text_block = str(markdown.get("text") or "")
         elif isinstance(item.get("text"), str):
             text_block = item["text"]
-        bbox = item.get("bbox") or item.get("box") or item.get("region") or item.get("poly") or []
+        bbox = (
+            item.get("bbox")
+            or item.get("box")
+            or item.get("region")
+            or item.get("poly")
+            or []
+        )
         for text_line in text_block.splitlines():
             stripped = text_line.strip()
             if stripped:
@@ -385,7 +439,9 @@ def extract_text_lines(ocr_result: Any) -> list[dict[str, Any]]:
                     lines.append(line)
             return lines
 
-        if "layoutParsingResults" in ocr_result and isinstance(ocr_result["layoutParsingResults"], list):
+        if "layoutParsingResults" in ocr_result and isinstance(
+            ocr_result["layoutParsingResults"], list
+        ):
             return _extract_from_layout_results(ocr_result["layoutParsingResults"])
 
         if "lines" in ocr_result and isinstance(ocr_result["lines"], list):
@@ -404,7 +460,10 @@ def extract_text_lines(ocr_result: Any) -> list[dict[str, Any]]:
             return []
 
         if all(_is_local_line(item) for item in ocr_result):
-            return [_build_line(text=item[1][0], score=item[1][1], bbox=item[0]) for item in ocr_result]
+            return [
+                _build_line(text=item[1][0], score=item[1][1], bbox=item[0])
+                for item in ocr_result
+            ]
 
         lines: list[dict[str, Any]] = []
         for item in ocr_result:
@@ -414,12 +473,47 @@ def extract_text_lines(ocr_result: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _get_ocr_engine() -> PaddleOCR:
+def _extract_text_lines_with_nested_fallback(
+    ocr_result: Any,
+) -> list[dict[str, Any]]:
+    lines = extract_text_lines(ocr_result)
+    nested_lines: list[dict[str, Any]] = []
+
+    if isinstance(ocr_result, dict):
+        results = ocr_result.get("results")
+        if isinstance(results, list):
+            for item in results:
+                if isinstance(item, dict) and isinstance(item.get("lines"), list):
+                    nested_lines.extend(extract_text_lines({"lines": item["lines"]}))
+
+    if not nested_lines:
+        return lines
+
+    if not lines:
+        return nested_lines
+
+    seen_keys = {
+        (line.get("text"), json.dumps(line.get("bbox"), ensure_ascii=False))
+        for line in lines
+    }
+    for line in nested_lines:
+        key = (line.get("text"), json.dumps(line.get("bbox"), ensure_ascii=False))
+        if key in seen_keys:
+            continue
+        lines.append(line)
+    return lines
+
+
+def _build_ocr_config(model: str) -> OCRConfig:
     settings = get_settings()
-    config = OCRConfig(
+    return OCRConfig(
         job_url=settings.PADDLEOCR_JOB_URL,
-        token=settings.PADDLEOCR_TOKEN.get_secret_value() if hasattr(settings.PADDLEOCR_TOKEN, "get_secret_value") else settings.PADDLEOCR_TOKEN,
-        model=settings.PADDLEOCR_MODEL,
+        token=(
+            settings.PADDLEOCR_TOKEN.get_secret_value()
+            if hasattr(settings.PADDLEOCR_TOKEN, "get_secret_value")
+            else settings.PADDLEOCR_TOKEN
+        ),
+        model=model,
         lang="ch",
         use_angle_cls=True,
         det=True,
@@ -443,6 +537,22 @@ def _get_ocr_engine() -> PaddleOCR:
         poll_timeout_s=settings.PADDLEOCR_POLL_TIMEOUT_S,
         request_timeout_s=settings.PADDLEOCR_REQUEST_TIMEOUT_S,
     )
+
+
+def _get_ocr_engine() -> PaddleOCR:
+    settings = get_settings()
+    config = _build_ocr_config(settings.PADDLEOCR_MODEL)
+    cache_key = json.dumps(asdict(config), ensure_ascii=False, sort_keys=True)
+    if cache_key not in _ENGINE_CACHE:
+        with _engine_lock:
+            if cache_key not in _ENGINE_CACHE:
+                _ENGINE_CACHE[cache_key] = PaddleOCR(config)
+    return _ENGINE_CACHE[cache_key]
+
+
+def _get_nutrition_ocr_engine() -> PaddleOCR:
+    settings = get_settings()
+    config = _build_ocr_config(settings.PADDLEOCR_NUTRITION_MODEL)
     cache_key = json.dumps(asdict(config), ensure_ascii=False, sort_keys=True)
     if cache_key not in _ENGINE_CACHE:
         with _engine_lock:
@@ -453,13 +563,15 @@ def _get_ocr_engine() -> PaddleOCR:
 
 def warmup() -> None:
     _get_ocr_engine()
+    _get_nutrition_ocr_engine()
 
 
 def recognize_full_text(image_bytes: bytes) -> OCRTextResult:
     engine = _get_ocr_engine()
     try:
-        raw_result = engine.ocr(image_bytes)
-        lines = extract_text_lines(raw_result)
+        prepared_bytes = _prepare_image_for_remote_ocr(image_bytes)
+        raw_result = engine.ocr(prepared_bytes)
+        lines = _extract_text_lines_with_nested_fallback(raw_result)
         raw_text = "\n".join(line["text"] for line in lines if line["text"])
         result = OCRTextResult(
             raw_text=raw_text,
@@ -501,20 +613,18 @@ def _extract_table_from_layout(layout_results: list[Any]) -> dict[str, Any] | No
 
 
 def _extract_table_from_html_fallback(html_text: str) -> dict[str, Any] | None:
-    import re
     if "<table" not in html_text.lower() or "</table>" not in html_text.lower():
         return None
 
     rows = _html_table_to_structured(html_text)
-    if rows and len(rows) >= 2:
-        table_json = _convert_table_to_nutrition_json(rows)
-        if table_json:
-            return {"html": html_text, "source": "html_fallback", "rows": rows}
+    if rows:
+        return {"html": html_text, "source": "html_fallback", "rows": rows}
     return None
 
 
 def _html_table_to_structured(html_content: str) -> list[list[str]]:
     import re
+
     rows: list[list[str]] = []
 
     cell_pattern = re.compile(r"<td[^>]*>(.*?)</td>", re.IGNORECASE | re.DOTALL)
@@ -545,81 +655,18 @@ def _html_table_to_structured(html_content: str) -> list[list[str]]:
     return rows
 
 
-def _parse_nutrition_value(value_str: str) -> float:
-    if not value_str:
-        return 0.0
-    import re
-    match = re.search(r"[\d.]+", value_str)
-    if match:
-        try:
-            return float(match.group())
-        except ValueError:
-            pass
-    return 0.0
-
-
 def _convert_table_to_nutrition_json(rows: list[list[str]]) -> dict[str, Any] | None:
-    if not rows or len(rows) < 2:
+    if not rows:
         return None
-
-    result: dict[str, Any] = {"table": [], "serving_size": None}
-
-    header_row = rows[0]
-    nutrient_map: dict[str, str] = {
-        "能量": "energy",
-        "蛋白质": "protein",
-        "脂肪": "fat",
-        "碳水化合物": "carbohydrate",
-        "碳水": "carbohydrate",
-        "糖": "sugar",
-        "钠": "sodium",
-        "膳食纤维": "fiber",
-        "反式脂肪酸": "trans_fat",
-        "饱和脂肪酸": "saturated_fat",
-        "胆固醇": "cholesterol",
-    }
-
-    for row in rows[1:]:
-        if len(row) < 2:
-            continue
-
-        name_cell = row[0].strip()
-        value_cell = row[1].strip() if len(row) > 1 else ""
-        nrv_cell = row[2].strip() if len(row) > 2 else ""
-
-        normalized_key = None
-        for cn_key, en_key in nutrient_map.items():
-            if cn_key in name_cell:
-                normalized_key = cn_key
-                break
-
-        if not normalized_key:
-            continue
-
-        num_value = _parse_nutrition_value(value_cell)
-
-        if "千焦" in value_cell or "kJ" in value_cell.upper():
-            unit = "kJ"
-        elif "毫克" in value_cell or "mg" in value_cell.lower():
-            unit = "mg"
-        else:
-            unit = "g"
-
-        result["table"].append({
-            "name": normalized_key,
-            "value": num_value,
-            "unit": unit,
-            "nrv": nrv_cell if nrv_cell else None
-        })
-
-    return result if result["table"] else None
+    return {"rows": rows}
 
 
 def recognize_nutrition_table(image_bytes: bytes) -> TableRecognitionResult:
-    engine = _get_ocr_engine()
+    engine = _get_nutrition_ocr_engine()
     try:
-        raw_result = engine.ocr(image_bytes)
-        lines = extract_text_lines(raw_result)
+        prepared_bytes = _prepare_image_for_remote_ocr(image_bytes)
+        raw_result = engine.ocr(prepared_bytes)
+        lines = _extract_text_lines_with_nested_fallback(raw_result)
         raw_text = "\n".join(line["text"] for line in lines if line["text"])
 
         table_json = None
@@ -638,17 +685,25 @@ def recognize_nutrition_table(image_bytes: bytes) -> TableRecognitionResult:
             if table_data and "html" in table_data:
                 rows = _html_table_to_structured(table_data["html"])
                 table_json = _convert_table_to_nutrition_json(rows)
-                has_table = table_json is not None
+                has_table = bool(table_json and table_json.get("rows"))
                 logger.info("table_html_parsed", rows=len(rows), has_table=has_table)
 
         if not has_table and raw_text and "<table" in raw_text.lower():
             table_data = _extract_table_from_html_fallback(raw_text)
             if table_data and "rows" in table_data:
                 table_json = _convert_table_to_nutrition_json(table_data["rows"])
-                has_table = table_json is not None
-                logger.info("table_from_fallback_parsed", rows=len(table_data["rows"]), has_table=has_table)
+                has_table = bool(table_json and table_json.get("rows"))
+                logger.info(
+                    "table_from_fallback_parsed",
+                    rows=len(table_data["rows"]),
+                    has_table=has_table,
+                )
 
-        logger.info("table_recognition_debug", has_table=has_table, raw_text_len=len(raw_text) if raw_text else 0)
+        logger.info(
+            "table_recognition_debug",
+            has_table=has_table,
+            raw_text_len=len(raw_text) if raw_text else 0,
+        )
 
         result = TableRecognitionResult(
             table_json=table_json,
@@ -681,23 +736,41 @@ def _run_single_ocr(image_bytes: bytes, config: OCRConfig) -> dict[str, Any]:
     return client._download_jsonl_results(str(json_url))
 
 
-def recognize_parallel(image_bytes: bytes) -> OCRParallelResult:
-    engine = _get_ocr_engine()
-    config = engine.config
+def recognize_parallel(
+    full_text_image_bytes: bytes,
+    nutrition_image_bytes: bytes | None = None,
+) -> OCRParallelResult:
+    full_text_config = _get_ocr_engine().config
+    nutrition_config = _get_nutrition_ocr_engine().config
+    if nutrition_image_bytes is None:
+        nutrition_image_bytes = full_text_image_bytes
+    prepared_full_text_image_bytes = _prepare_image_for_remote_ocr(full_text_image_bytes)
+    prepared_nutrition_image_bytes = _prepare_image_for_remote_ocr(
+        nutrition_image_bytes
+    )
 
     try:
         job1_result, job2_result = _run_parallel_jobs(
-            image_bytes, config
+            prepared_full_text_image_bytes,
+            prepared_nutrition_image_bytes,
+            full_text_config,
+            nutrition_config,
         )
 
-        full_text_lines = extract_text_lines(job1_result)
-        full_text_raw = "\n".join(line["text"] for line in full_text_lines if line["text"])
+        full_text_lines = _extract_text_lines_with_nested_fallback(job1_result)
+        full_text_raw = "\n".join(
+            line["text"] for line in full_text_lines if line["text"]
+        )
+        nutrition_lines = _extract_text_lines_with_nested_fallback(job2_result)
+        nutrition_raw = "\n".join(
+            line["text"] for line in nutrition_lines if line["text"]
+        )
 
         nutrition_result = TableRecognitionResult(
             table_json=None,
             table_html_url=None,
             table_xlsx_url=None,
-            ocr_fallback_text=full_text_raw,
+            ocr_fallback_text=nutrition_raw or full_text_raw,
             source="ocr_runtime",
         )
 
@@ -715,13 +788,13 @@ def recognize_parallel(image_bytes: bytes) -> OCRParallelResult:
             if table_data and "html" in table_data:
                 rows = _html_table_to_structured(table_data["html"])
                 table_json = _convert_table_to_nutrition_json(rows)
-                has_table = table_json is not None
+                has_table = bool(table_json and table_json.get("rows"))
 
         if not has_table and full_text_raw and "<table" in full_text_raw.lower():
             table_data = _extract_table_from_html_fallback(full_text_raw)
             if table_data and "rows" in table_data:
                 table_json = _convert_table_to_nutrition_json(table_data["rows"])
-                has_table = table_json is not None
+                has_table = bool(table_json and table_json.get("rows"))
 
         nutrition_result.table_json = table_json
         logger.info("table_recognition_completed", has_table=has_table)
@@ -744,12 +817,19 @@ def recognize_parallel(image_bytes: bytes) -> OCRParallelResult:
         raise OCRServiceError("OCR runtime failed") from exc
 
 
-def _run_parallel_jobs(image_bytes: bytes, config: OCRConfig) -> tuple[dict[str, Any], dict[str, Any]]:
+def _run_parallel_jobs(
+    full_text_image_bytes: bytes,
+    nutrition_image_bytes: bytes,
+    full_text_config: OCRConfig,
+    nutrition_config: OCRConfig,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     import concurrent.futures
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        future1 = executor.submit(_run_single_ocr, image_bytes, config)
-        future2 = executor.submit(_run_single_ocr, image_bytes, config)
+        future1 = executor.submit(_run_single_ocr, full_text_image_bytes, full_text_config)
+        future2 = executor.submit(
+            _run_single_ocr, nutrition_image_bytes, nutrition_config
+        )
 
         job1_result = future1.result()
         job2_result = future2.result()

@@ -1,5 +1,7 @@
 # Food Label Analyzer 后端说明
 
+详细分析链路文档见：[backend-analysis-pipeline.md](backend-analysis-pipeline.md)
+
 ## 1. 项目定位
 
 Food Label Analyzer 是一个面向“食品标签图片上传 → 后台分析 → 生成健康报告”的后端服务。
@@ -170,4 +172,3 @@ JWT 逻辑：[security.py](file:///e:/GraduationProject/foodguard/food-label-ana
 - 业务逻辑放 service：跨模块编排放 `app/services/`
 - 外部能力适配放 worker：OCR/YOLO/RAG/LLM 相关都集中到 `app/workers/`
 - 统一从 `Settings` 取配置：避免散落读取环境变量
-

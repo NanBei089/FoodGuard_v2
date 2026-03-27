@@ -35,6 +35,9 @@ class _ScalarResult:
     def scalar_one_or_none(self):
         return self._value
 
+    def scalars(self):
+        return SimpleNamespace(all=lambda: self._value)
+
 
 def _build_auth_app(monkeypatch: pytest.MonkeyPatch):
     load_required_env(monkeypatch)
@@ -45,7 +48,9 @@ def _build_auth_app(monkeypatch: pytest.MonkeyPatch):
     return app, api_module
 
 
-def test_auth_schemas_normalize_email_and_validate_password(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auth_schemas_normalize_email_and_validate_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
     schema_module = importlib.reload(importlib.import_module("app.schemas.auth"))
 
@@ -68,7 +73,9 @@ def test_send_register_code_persists_verification_and_sets_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
 
     fake_db = AsyncMock()
     fake_db.add = Mock()
@@ -85,7 +92,9 @@ def test_send_register_code_persists_verification_and_sets_cooldown(
 
     monkeypatch.setattr(service_module.asyncio, "create_task", fake_create_task)
 
-    cooldown = asyncio.run(service_module.send_register_code("User@Example.com", fake_db, fake_redis))
+    cooldown = asyncio.run(
+        service_module.send_register_code("User@Example.com", fake_db, fake_redis)
+    )
 
     assert cooldown == 60
     assert fake_db.add.call_count == 1
@@ -93,14 +102,18 @@ def test_send_register_code_persists_verification_and_sets_cooldown(
     assert isinstance(verification, EmailVerification)
     assert verification.email == "user@example.com"
     assert verification.type == VerificationType.REGISTER
-    fake_redis.set.assert_awaited_once_with("cooldown:register:user@example.com", "1", ex=60)
+    fake_redis.set.assert_awaited_once_with(
+        "cooldown:register:user@example.com", "1", ex=60
+    )
     assert len(scheduled) == 1
     scheduled[0].close()
 
 
 def test_send_register_code_enforces_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
 
     fake_db = AsyncMock()
     fake_db.execute = AsyncMock(return_value=_ScalarResult(None))
@@ -109,7 +122,9 @@ def test_send_register_code_enforces_cooldown(monkeypatch: pytest.MonkeyPatch) -
     fake_redis.ttl.return_value = 42
 
     with pytest.raises(CooldownError) as exc_info:
-        asyncio.run(service_module.send_register_code("user@example.com", fake_db, fake_redis))
+        asyncio.run(
+            service_module.send_register_code("user@example.com", fake_db, fake_redis)
+        )
 
     assert exc_info.value.detail == {"retry_after_seconds": 42}
 
@@ -118,7 +133,9 @@ def test_register_user_marks_verification_used_and_creates_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
     verification = EmailVerification(
         email="user@example.com",
         code="123456",
@@ -136,7 +153,11 @@ def test_register_user_marks_verification_used_and_creates_user(
         ]
     )
 
-    asyncio.run(service_module.register_user("user@example.com", "123456", "StrongPass123", fake_db))
+    asyncio.run(
+        service_module.register_user(
+            "user@example.com", "123456", "StrongPass123", fake_db
+        )
+    )
 
     created_user = fake_db.add.call_args.args[0]
     assert isinstance(created_user, User)
@@ -145,9 +166,13 @@ def test_register_user_marks_verification_used_and_creates_user(
     assert verification.is_used is True
 
 
-def test_register_user_translates_integrity_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_register_user_translates_integrity_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
     verification = EmailVerification(
         email="user@example.com",
         code="123456",
@@ -157,7 +182,9 @@ def test_register_user_translates_integrity_error(monkeypatch: pytest.MonkeyPatc
 
     fake_db = AsyncMock()
     fake_db.add = Mock()
-    fake_db.flush = AsyncMock(side_effect=IntegrityError("insert", {}, Exception("dup")))
+    fake_db.flush = AsyncMock(
+        side_effect=IntegrityError("insert", {}, Exception("dup"))
+    )
     fake_db.execute = AsyncMock(
         side_effect=[
             _ScalarResult(verification),
@@ -166,14 +193,20 @@ def test_register_user_translates_integrity_error(monkeypatch: pytest.MonkeyPatc
     )
 
     with pytest.raises(EmailAlreadyExistsError):
-        asyncio.run(service_module.register_user("user@example.com", "123456", "StrongPass123", fake_db))
+        asyncio.run(
+            service_module.register_user(
+                "user@example.com", "123456", "StrongPass123", fake_db
+            )
+        )
 
     fake_db.rollback.assert_not_awaited()
 
 
 def test_login_user_success_and_error_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
     active_user = User(
         email="user@example.com",
         password_hash=hash_password("StrongPass123"),
@@ -183,15 +216,21 @@ def test_login_user_success_and_error_branches(monkeypatch: pytest.MonkeyPatch) 
     active_user.id = uuid.uuid4()
 
     fake_db = AsyncMock()
+    fake_db.add = Mock()
+    fake_db.flush = AsyncMock()
     fake_db.execute = AsyncMock(return_value=_ScalarResult(active_user))
-    tokens = asyncio.run(service_module.login_user("user@example.com", "StrongPass123", fake_db))
+    tokens = asyncio.run(
+        service_module.login_user("user@example.com", "StrongPass123", fake_db)
+    )
     assert tokens.token_type == "Bearer"
     assert tokens.access_token
     assert tokens.refresh_token
 
     fake_db.execute = AsyncMock(return_value=_ScalarResult(None))
     with pytest.raises(InvalidCredentialsError):
-        asyncio.run(service_module.login_user("missing@example.com", "StrongPass123", fake_db))
+        asyncio.run(
+            service_module.login_user("missing@example.com", "StrongPass123", fake_db)
+        )
 
     unverified_user = User(
         email="user@example.com",
@@ -201,12 +240,18 @@ def test_login_user_success_and_error_branches(monkeypatch: pytest.MonkeyPatch) 
     )
     fake_db.execute = AsyncMock(return_value=_ScalarResult(unverified_user))
     with pytest.raises(EmailNotVerifiedError):
-        asyncio.run(service_module.login_user("user@example.com", "StrongPass123", fake_db))
+        asyncio.run(
+            service_module.login_user("user@example.com", "StrongPass123", fake_db)
+        )
 
 
-def test_refresh_tokens_rejects_non_refresh_token(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_refresh_tokens_rejects_non_refresh_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
     monkeypatch.setattr(
         service_module,
         "decode_token",
@@ -221,7 +266,9 @@ def test_send_reset_email_does_not_enumerate_unknown_users(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
 
     fake_db = AsyncMock()
     fake_db.add = Mock()
@@ -230,15 +277,21 @@ def test_send_reset_email_does_not_enumerate_unknown_users(
     fake_redis = AsyncMock()
     fake_redis.exists.return_value = False
 
-    asyncio.run(service_module.send_reset_email("missing@example.com", fake_db, fake_redis))
+    asyncio.run(
+        service_module.send_reset_email("missing@example.com", fake_db, fake_redis)
+    )
 
     fake_db.add.assert_not_called()
-    fake_redis.set.assert_awaited_once_with("cooldown:reset:missing@example.com", "1", ex=60)
+    fake_redis.set.assert_awaited_once_with(
+        "cooldown:reset:missing@example.com", "1", ex=60
+    )
 
 
 def test_reset_password_marks_token_used(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
 
     user = User(
         email="user@example.com",
@@ -254,12 +307,14 @@ def test_reset_password_marks_token_used(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     fake_db = AsyncMock()
+    fake_db.add = Mock()
     fake_db.flush = AsyncMock()
     fake_db.execute = AsyncMock(
         side_effect=[
             _ScalarResult(reset_token),
             _ScalarResult(user),
-        ]
+            _ScalarResult([]),
+        ],
     )
 
     asyncio.run(service_module.reset_password("reset-token", "StrongPass123", fake_db))
@@ -268,20 +323,54 @@ def test_reset_password_marks_token_used(monkeypatch: pytest.MonkeyPatch) -> Non
     assert user.password_hash != hash_password("OldPass123")
 
 
-def test_reset_password_raises_dedicated_invalid_token_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_logout_user_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    service_module = importlib.reload(importlib.import_module("app.services.auth_service"))
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
+
+    fake_db = AsyncMock()
+    fake_db.flush = AsyncMock()
+    fake_db.execute = AsyncMock(return_value=_ScalarResult(None))
+    monkeypatch.setattr(
+        service_module,
+        "decode_token",
+        lambda token: {
+            "sub": str(uuid.uuid4()),
+            "type": "refresh",
+            "jti": "refresh-jti",
+        },
+    )
+
+    asyncio.run(service_module.logout_user("refresh-token", fake_db))
+
+    fake_db.flush.assert_not_awaited()
+
+
+def test_reset_password_raises_dedicated_invalid_token_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    load_required_env(monkeypatch)
+    service_module = importlib.reload(
+        importlib.import_module("app.services.auth_service")
+    )
 
     fake_db = AsyncMock()
     fake_db.execute = AsyncMock(return_value=_ScalarResult(None))
 
     with pytest.raises(PasswordResetTokenInvalidError):
-        asyncio.run(service_module.reset_password("bad-token", "StrongPass123", fake_db))
+        asyncio.run(
+            service_module.reset_password("bad-token", "StrongPass123", fake_db)
+        )
 
 
-def test_email_service_wrapper_logs_and_swallows_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_email_service_wrapper_logs_and_swallows_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    email_service_module = importlib.reload(importlib.import_module("app.services.email_service"))
+    email_service_module = importlib.reload(
+        importlib.import_module("app.services.email_service")
+    )
 
     class FailingEmailService:
         async def send_verification_code(self, email: str, code: str) -> None:
@@ -290,10 +379,16 @@ def test_email_service_wrapper_logs_and_swallows_failures(monkeypatch: pytest.Mo
         async def send_password_reset(self, email: str, reset_link: str) -> None:
             raise RuntimeError("smtp down")
 
-    monkeypatch.setattr(email_service_module, "get_email_service", lambda: FailingEmailService())
+    monkeypatch.setattr(
+        email_service_module, "get_email_service", lambda: FailingEmailService()
+    )
 
-    asyncio.run(email_service_module.send_verification_email("user@example.com", "123456"))
-    asyncio.run(email_service_module.send_reset_email("user@example.com", "reset-token"))
+    asyncio.run(
+        email_service_module.send_verification_email("user@example.com", "123456")
+    )
+    asyncio.run(
+        email_service_module.send_reset_email("user@example.com", "reset-token")
+    )
 
 
 def test_auth_router_login_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -327,7 +422,9 @@ def test_auth_router_login_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["data"]["access_token"] == "access"
 
 
-def test_auth_router_login_returns_403_for_unverified_email(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auth_router_login_returns_403_for_unverified_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     app, api_module = _build_auth_app(monkeypatch)
     fake_db = AsyncMock()
 
@@ -348,3 +445,57 @@ def test_auth_router_login_returns_403_for_unverified_email(monkeypatch: pytest.
 
     assert response.status_code == 403
     assert response.json()["code"] == 4011
+
+
+def test_auth_router_register_returns_translated_validation_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, api_module = _build_auth_app(monkeypatch)
+    fake_db = AsyncMock()
+
+    async def override_db():
+        yield fake_db
+
+    app.dependency_overrides[api_module.get_db] = override_db
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/register",
+            json={
+                "email": "user@example.com",
+                "code": "123456",
+                "password": "weakpass",
+            },
+        )
+
+    payload = response.json()
+    assert response.status_code == 422
+    assert payload["code"] == 4220
+    assert payload["message"] == "密码必须同时包含大写字母、小写字母和数字"
+    assert payload["data"]["errors"] == [
+        {
+            "field": "password",
+            "message": "密码必须同时包含大写字母、小写字母和数字",
+            "type": "value_error",
+        }
+    ]
+
+
+def test_auth_router_logout_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    app, api_module = _build_auth_app(monkeypatch)
+    fake_db = AsyncMock()
+
+    async def override_db():
+        yield fake_db
+
+    async def fake_logout_user(refresh_token: str, db) -> None:
+        assert refresh_token == "refresh-token"
+
+    app.dependency_overrides[api_module.get_db] = override_db
+    monkeypatch.setattr(api_module, "logout_user", fake_logout_user)
+
+    with TestClient(app) as client:
+        response = client.post("/logout", json={"refresh_token": "refresh-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"code": 0, "message": "ok", "data": None}

@@ -33,13 +33,11 @@ from app.core.security import (
 )
 from app.models.email_verification import EmailVerification, VerificationType
 from app.models.password_reset import PasswordResetToken
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth import TokenResponse, validate_password_strength
-from app.services.email_service import (
-    send_reset_email as dispatch_reset_email,
-    send_verification_email,
-)
-
+from app.services.email_service import send_reset_email as dispatch_reset_email
+from app.services.email_service import send_verification_email
 
 EMAIL_VERIFY_CODE_EXPIRE_SECONDS = 300
 RESET_TOKEN_EXPIRE_SECONDS = 900
@@ -51,11 +49,34 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _build_token_response(user_id: str) -> TokenResponse:
+async def _revoke_all_refresh_tokens_for_user(
+    user_id: uuid.UUID, db: AsyncSession
+) -> None:
+    result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    now = datetime.now(timezone.utc)
+    for token in result.scalars().all():
+        token.revoked_at = now
+
+
+async def _issue_token_response(user: User, db: AsyncSession) -> TokenResponse:
     settings = get_settings()
+    refresh_jti = uuid.uuid4().hex
+    refresh_token = create_refresh_token(str(user.id), jti=refresh_jti)
+    refresh_record = RefreshToken(
+        user_id=user.id,
+        jti=refresh_jti,
+        expires_at=datetime.now(timezone.utc) + settings.jwt_refresh_expire_timedelta,
+    )
+    db.add(refresh_record)
+    await db.flush()
     return TokenResponse(
-        access_token=create_access_token(user_id),
-        refresh_token=create_refresh_token(user_id),
+        access_token=create_access_token(str(user.id)),
+        refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -85,7 +106,8 @@ async def send_register_code(email: str, db: AsyncSession, redis: Redis) -> int:
         email=normalized_email,
         code=f"{random.randint(0, 999999):06d}",
         type=VerificationType.REGISTER,
-        expired_at=datetime.now(timezone.utc) + timedelta(seconds=EMAIL_VERIFY_CODE_EXPIRE_SECONDS),
+        expired_at=datetime.now(timezone.utc)
+        + timedelta(seconds=EMAIL_VERIFY_CODE_EXPIRE_SECONDS),
     )
     db.add(verification)
     await db.flush()
@@ -150,7 +172,25 @@ async def login_user(email: str, password: str, db: AsyncSession) -> TokenRespon
     if not verify_password(password, user.password_hash):
         raise InvalidCredentialsError()
 
-    return _build_token_response(str(user.id))
+    return await _issue_token_response(user, db)
+
+
+async def logout_user(refresh_token: str, db: AsyncSession) -> None:
+    payload = decode_token(refresh_token)
+    if payload.get("type") != REFRESH_TOKEN_TYPE:
+        raise TokenInvalidError()
+
+    refresh_jti = payload.get("jti")
+    if not refresh_jti:
+        raise TokenInvalidError()
+
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.jti == str(refresh_jti))
+    )
+    token_record = result.scalar_one_or_none()
+    if token_record is not None and token_record.revoked_at is None:
+        token_record.revoked_at = datetime.now(timezone.utc)
+        await db.flush()
 
 
 async def refresh_tokens(refresh_token: str, db: AsyncSession) -> TokenResponse:
@@ -158,17 +198,32 @@ async def refresh_tokens(refresh_token: str, db: AsyncSession) -> TokenResponse:
     if payload.get("type") != REFRESH_TOKEN_TYPE:
         raise TokenInvalidError()
 
+    refresh_jti = payload.get("jti")
+    if not refresh_jti:
+        raise TokenInvalidError()
+
     try:
         user_id = uuid.UUID(str(payload.get("sub")))
     except (TypeError, ValueError) as exc:
         raise TokenInvalidError() from exc
 
-    result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
+    token_result = await db.execute(
+        select(RefreshToken).where(RefreshToken.jti == str(refresh_jti))
+    )
+    token_record = token_result.scalar_one_or_none()
+    if token_record is None or token_record.revoked_at is not None:
+        raise TokenInvalidError()
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.is_active.is_(True))
+    )
     user = result.scalar_one_or_none()
     if user is None:
         raise TokenInvalidError()
 
-    return _build_token_response(str(user.id))
+    token_record.revoked_at = datetime.now(timezone.utc)
+    await db.flush()
+    return await _issue_token_response(user, db)
 
 
 async def send_reset_email(email: str, db: AsyncSession, redis: Redis) -> None:
@@ -186,7 +241,8 @@ async def send_reset_email(email: str, db: AsyncSession, redis: Redis) -> None:
         reset_token = PasswordResetToken(
             user_id=user.id,
             token=secrets.token_urlsafe(48),
-            expired_at=datetime.now(timezone.utc) + timedelta(seconds=RESET_TOKEN_EXPIRE_SECONDS),
+            expired_at=datetime.now(timezone.utc)
+            + timedelta(seconds=RESET_TOKEN_EXPIRE_SECONDS),
         )
         db.add(reset_token)
         await db.flush()
@@ -217,14 +273,17 @@ async def reset_password(token: str, new_password: str, db: AsyncSession) -> Non
 
     user.password_hash = hash_password(new_password)
     reset_token.is_used = True
+    await _revoke_all_refresh_tokens_for_user(user.id, db)
     await db.flush()
 
 
 __all__ = [
     "login_user",
+    "logout_user",
     "refresh_tokens",
     "register_user",
     "reset_password",
     "send_register_code",
     "send_reset_email",
+    "_revoke_all_refresh_tokens_for_user",
 ]

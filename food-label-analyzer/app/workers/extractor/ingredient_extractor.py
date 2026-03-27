@@ -8,8 +8,9 @@ import structlog
 from openai import OpenAI
 
 from app.core.config import get_settings
-from app.workers.extractor.prompts.ingredient_extract import build_ingredient_extract_prompt
-
+from app.workers.extractor.prompts.ingredient_extract import (
+    build_ingredient_extract_prompt,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -62,7 +63,9 @@ SEPARATORS = {"、", "，", ","}
 LEFT_BRACKETS = {"（", "(", "【"}
 RIGHT_BRACKETS = {"）", ")", "】"}
 COMPOUND_PATTERN = re.compile(r"^(.+?)[（(【](.+?)[）)】]$")
-ADDITION_PATTERN = re.compile(r"[（(]?\s*(?:添加量|含量)\s*[≥≤><]?\s*\d+\.?\d*\s*%?\s*[）)]?")
+ADDITION_PATTERN = re.compile(
+    r"[（(]?\s*(?:添加量|含量)\s*[≥≤><]?\s*\d+\.?\d*\s*%?\s*[）)]?"
+)
 
 
 def _get_llm_client() -> OpenAI:
@@ -105,7 +108,11 @@ def _locate_ingredients_text(full_raw_text: str) -> tuple[str, bool]:
     start_index = first_match[0] + len(first_match[1])
     raw_ingredients = full_raw_text[start_index:]
     raw_ingredients = raw_ingredients.lstrip("：: \t\r\n")
-    end_positions = [match.start() for pattern in STOP_PATTERNS if (match := pattern.search(raw_ingredients))]
+    end_positions = [
+        match.start()
+        for pattern in STOP_PATTERNS
+        if (match := pattern.search(raw_ingredients))
+    ]
     end_pos = min(end_positions) if end_positions else min(len(raw_ingredients), 2000)
     return raw_ingredients[:end_pos].strip(), True
 
@@ -174,7 +181,9 @@ def _llm_extract(full_raw_text: str) -> list[str]:
     payload = json.loads(content)
     if not isinstance(payload, list):
         return []
-    return _deduplicate_keep_order([str(item).strip() for item in payload if str(item).strip()])
+    return _deduplicate_keep_order(
+        [str(item).strip() for item in payload if str(item).strip()]
+    )
 
 
 def extract(full_raw_text: str) -> tuple[list[str], str]:

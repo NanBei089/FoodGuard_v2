@@ -118,7 +118,9 @@ def _merge_broken_lines(lines: list[str]) -> list[str]:
         current = lines[index]
         next_index = index
 
-        while next_index + 1 < len(lines) and _should_merge(current, lines[next_index + 1]):
+        while next_index + 1 < len(lines) and _should_merge(
+            current, lines[next_index + 1]
+        ):
             current = f"{current}{lines[next_index + 1].lstrip()}"
             next_index += 1
 
@@ -142,18 +144,28 @@ def _should_merge(current: str, next_line: str) -> bool:
     next_anchor_match = bool(FORCED_ANCHOR_RE.search(next_compact))
     combined = f"{current_compact}{next_compact}"
 
-    if FORCED_ANCHOR_RE.search(combined) and not current_anchor_match and not next_anchor_match:
+    if (
+        FORCED_ANCHOR_RE.search(combined)
+        and not current_anchor_match
+        and not next_anchor_match
+    ):
         return True
 
     if current.endswith((":", "：")):
         return True
 
     if LICENSE_NUMBER_RE.fullmatch(next_compact) and (
-        "许可证" in current_compact or "SC" in current_compact or "编号" in current_compact
+        "许可证" in current_compact
+        or "SC" in current_compact
+        or "编号" in current_compact
     ):
         return True
 
-    if MERGE_VALUE_PREFIX_RE.search(current) and not next_anchor_match and not TERMINAL_PUNCT_RE.search(current):
+    if (
+        MERGE_VALUE_PREFIX_RE.search(current)
+        and not next_anchor_match
+        and not TERMINAL_PUNCT_RE.search(current)
+    ):
         return True
 
     return False

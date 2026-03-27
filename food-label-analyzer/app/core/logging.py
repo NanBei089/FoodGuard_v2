@@ -4,7 +4,6 @@ import logging
 
 import structlog
 
-
 # Example usage: logger = structlog.get_logger(__name__)
 
 
@@ -52,7 +51,8 @@ def setup_logging(log_level: str, log_format: str) -> None:
     logging.captureWarnings(True)
     structlog.reset_defaults()
     structlog.configure(
-        processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        processors=shared_processors
+        + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,

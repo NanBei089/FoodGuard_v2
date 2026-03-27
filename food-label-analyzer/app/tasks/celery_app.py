@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib
+import os
+
 import structlog
 from celery import Celery
 from celery.signals import worker_init
@@ -8,8 +11,8 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.workers import llm_worker, ocr_worker, rag_worker, yolo_worker
 
-
 settings = get_settings()
+_IS_WINDOWS = os.name == "nt"
 
 celery_app = Celery("food_label_analyzer")
 celery_app.conf.update(
@@ -25,10 +28,12 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_soft_time_limit=270,
     task_time_limit=300,
+    worker_pool="solo" if _IS_WINDOWS else None,
+    worker_concurrency=1 if _IS_WINDOWS else None,
     timezone="Asia/Shanghai",
     enable_utc=True,
 )
-celery_app.autodiscover_tasks(["app.tasks"])
+importlib.import_module("app.tasks.analysis_task")
 
 
 def _initialize_worker_resources() -> None:
@@ -40,8 +45,7 @@ def _initialize_worker_resources() -> None:
     try:
         yolo_worker.warmup()
     except Exception as exc:
-        logger.critical("yolo_warmup_failed", error=str(exc))
-        raise
+        logger.warning("yolo_warmup_failed", error=str(exc))
 
     try:
         ocr_worker.warmup()

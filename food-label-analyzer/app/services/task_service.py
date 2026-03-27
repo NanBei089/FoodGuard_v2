@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import uuid
+from typing import Literal, cast
 
 from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
@@ -18,7 +19,12 @@ from app.core.errors import (
 )
 from app.models.analysis_task import AnalysisTask, TaskStatus
 from app.models.report import Report
-from app.schemas.analysis import STATUS_MESSAGES, TaskStatusResponse, sanitize_error_message
+from app.schemas.analysis import (
+    STATUS_MESSAGES,
+    TaskStatusResponse,
+    sanitize_error_message,
+    to_external_task_status,
+)
 
 
 def _detect_image_type(data: bytes) -> str | None:
@@ -87,7 +93,9 @@ async def create_task(
     return task
 
 
-async def update_celery_task_id(task_id: uuid.UUID, celery_task_id: str, db: AsyncSession) -> None:
+async def update_celery_task_id(
+    task_id: uuid.UUID, celery_task_id: str, db: AsyncSession
+) -> None:
     task = await db.get(AnalysisTask, task_id)
     if task is not None:
         task.celery_task_id = celery_task_id
@@ -110,21 +118,34 @@ async def get_task_with_permission(
     return task
 
 
-async def get_task_status_payload(task: AnalysisTask, db: AsyncSession) -> TaskStatusResponse:
+async def get_task_status_payload(
+    task: AnalysisTask, db: AsyncSession
+) -> TaskStatusResponse:
     report = task.report
     if report is None and task.status == TaskStatus.COMPLETED:
         result = await db.execute(select(Report).where(Report.task_id == task.id))
         report = result.scalar_one_or_none()
+    external_status = cast(
+        "Literal['queued', 'processing', 'completed', 'failed']",
+        to_external_task_status(task.status.value),
+    )
+    nutrition_parse_source = cast(
+        "Literal['table_recognition', 'ocr_text', 'llm_fallback', 'empty', 'failed'] | None",
+        report.nutrition_parse_source if report is not None else None,
+    )
 
     return TaskStatusResponse(
         task_id=task.id,
-        status=task.status.value,
-        progress_message=STATUS_MESSAGES.get(task.status.value, "系统正在处理中"),
+        status=external_status,
+        progress_message=STATUS_MESSAGES.get(
+            external_status,
+            "系统正在处理中",
+        ),
         created_at=task.created_at,
         completed_at=task.completed_at,
         report_id=report.id if report is not None else None,
         error_message=sanitize_error_message(task.error_message),
-        nutrition_parse_source=report.nutrition_parse_source if report is not None else None,
+        nutrition_parse_source=nutrition_parse_source,
     )
 
 

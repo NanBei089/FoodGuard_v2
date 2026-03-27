@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from redis.asyncio import Redis
-from redis.asyncio import from_url
+from redis.asyncio import Redis, from_url
 
 from app.core.config import get_settings
-
 
 _redis_client: Redis | None = None
 

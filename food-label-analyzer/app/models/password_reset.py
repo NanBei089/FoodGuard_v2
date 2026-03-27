@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, TIMESTAMP, text
+from sqlalchemy import TIMESTAMP, Boolean, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -26,8 +26,12 @@ class PasswordResetToken(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    is_used: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    expired_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    is_used: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    expired_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
     user: Mapped["User"] = relationship(back_populates="password_reset_tokens")
 
 

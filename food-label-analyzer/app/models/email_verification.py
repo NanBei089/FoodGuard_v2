@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Index, String, TIMESTAMP, text
+from sqlalchemy import TIMESTAMP, Boolean, Index, String, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,11 +21,20 @@ class EmailVerification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str] = mapped_column(String(6), nullable=False)
     type: Mapped[VerificationType] = mapped_column(
-        PgEnum(VerificationType, name="verification_type", create_type=True),
+        PgEnum(
+            VerificationType,
+            name="verification_type",
+            create_type=True,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
-    is_used: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    expired_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    is_used: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    expired_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
 
 
 __all__ = ["EmailVerification", "VerificationType"]

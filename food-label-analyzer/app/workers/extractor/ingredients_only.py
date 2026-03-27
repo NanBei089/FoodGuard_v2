@@ -28,12 +28,18 @@ def build_ingredients_output(
     input_json: str,
 ) -> dict[str, Any]:
     raw_text = str(ingredient_topic.get("text") or "")
-    trace_meta = ingredient_topic.get("trace", {}) if isinstance(ingredient_topic, dict) else {}
+    trace_meta = (
+        ingredient_topic.get("trace", {}) if isinstance(ingredient_topic, dict) else {}
+    )
     prepared = _prepare_ingredient_segment(raw_text)
     ingredient_text = prepared["text"]
     found = bool(ingredient_topic.get("found")) and bool(ingredient_text)
 
-    items = [{"term": term} for term in _split_ingredient_terms(ingredient_text)] if found else []
+    items = (
+        [{"term": term} for term in _split_ingredient_terms(ingredient_text)]
+        if found
+        else []
+    )
 
     return {
         "roi_id": roi_id,
@@ -45,8 +51,10 @@ def build_ingredients_output(
         "items": items,
         "notes": [],
         "trace": {
-            "start_anchor": prepared["start_anchor"] or str(trace_meta.get("start_anchor") or ""),
-            "end_anchor": prepared["end_anchor"] or str(trace_meta.get("end_anchor") or ""),
+            "start_anchor": prepared["start_anchor"]
+            or str(trace_meta.get("start_anchor") or ""),
+            "end_anchor": prepared["end_anchor"]
+            or str(trace_meta.get("end_anchor") or ""),
         },
     }
 

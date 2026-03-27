@@ -67,7 +67,9 @@ def _health_advice_payload() -> list[dict[str, str]]:
 
 def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    report_service_module = importlib.reload(importlib.import_module("app.services.report_service"))
+    report_service_module = importlib.reload(
+        importlib.import_module("app.services.report_service")
+    )
 
     user_id = uuid.uuid4()
     task_id = uuid.uuid4()
@@ -87,7 +89,37 @@ def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) 
         task_id=task_id,
         user_id=user_id,
         ingredients_text="salt, sugar",
-        nutrition_json={"items": [], "serving_size": "100g", "parse_method": "ocr_text"},
+        nutrition_json={
+            "items": [
+                {
+                    "name": "能量",
+                    "value": "1330",
+                    "unit": "kJ",
+                    "daily_reference_percent": "16%",
+                    "level": "attention",
+                    "recommendation": "注意控制单次食用量",
+                },
+                {
+                    "name": "蛋白质",
+                    "value": "12.6",
+                    "unit": "g",
+                    "daily_reference_percent": "21%",
+                    "level": "good",
+                    "recommendation": "可作为补充来源",
+                },
+                {
+                    "name": "钠",
+                    "value": "509",
+                    "unit": "mg",
+                    "daily_reference_percent": "25%",
+                    "level": "warning",
+                    "recommendation": "钠偏高需重点控制",
+                },
+            ],
+            "serving_size": "每100克",
+            "advice_summary": "该食品钠偏高，蛋白质尚可，建议控制单次食用量并避免与高盐食品同食。",
+            "parse_method": "ocr_text",
+        },
         nutrition_parse_source="ocr_text",
         rag_results_json={
             "source_file": "chromadb",
@@ -131,8 +163,12 @@ def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) 
     report.id = report_id
     report.created_at = created_at
 
-    fake_storage = SimpleNamespace(get_presigned_url=AsyncMock(return_value="https://example.com/signed.png"))
-    monkeypatch.setattr(report_service_module, "get_storage_service", lambda: fake_storage)
+    fake_storage = SimpleNamespace(
+        get_presigned_url=AsyncMock(return_value="https://example.com/signed.png")
+    )
+    monkeypatch.setattr(
+        report_service_module, "get_storage_service", lambda: fake_storage
+    )
 
     fake_db = AsyncMock()
     fake_db.execute = AsyncMock(
@@ -143,8 +179,12 @@ def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) 
         ]
     )
 
-    report_list = asyncio.run(report_service_module.get_report_list(user_id, 5, 10, fake_db))
-    detail = asyncio.run(report_service_module.get_report_detail(report.id, user_id, fake_db))
+    report_list = asyncio.run(
+        report_service_module.get_report_list(user_id, 5, 10, fake_db)
+    )
+    detail = asyncio.run(
+        report_service_module.get_report_detail(report.id, user_id, fake_db)
+    )
 
     assert report_list.total == 1
     assert report_list.page == 1
@@ -153,6 +193,16 @@ def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) 
     assert report_list.items[0].image_url == "https://example.com/signed.png"
     assert detail.nutrition_parse_source == "ocr_text"
     assert detail.nutrition is not None
+    assert detail.nutrition_table is not None
+    assert detail.nutrition_table.serving_basis == "每100克 (Per 100g)"
+    assert len(detail.nutrition_table.rows) == 3
+    assert detail.nutrition_table.rows[0].display_name == "能量 / Energy"
+    assert detail.nutrition_table.rows[1].level == "good"
+    assert detail.nutrition_table.rows[2].recommendation == "钠偏高需重点控制"
+    assert (
+        detail.nutrition_table.advice_summary
+        == "该食品钠偏高，蛋白质尚可，建议控制单次食用量并避免与高盐食品同食。"
+    )
     assert detail.analysis.summary == "S" * 60
     assert len(detail.analysis.ingredients) == 1
     assert len(detail.analysis.health_advice) == 5
@@ -163,14 +213,20 @@ def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) 
     assert detail.artifact_urls == {"ocr_full_json_url": "https://example.com/ocr.json"}
 
 
-def test_report_service_returns_empty_page_when_total_is_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_report_service_returns_empty_page_when_total_is_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    report_service_module = importlib.reload(importlib.import_module("app.services.report_service"))
+    report_service_module = importlib.reload(
+        importlib.import_module("app.services.report_service")
+    )
 
     fake_db = AsyncMock()
     fake_db.execute = AsyncMock(return_value=_ScalarResult(0))
 
-    report_list = asyncio.run(report_service_module.get_report_list(uuid.uuid4(), 3, 10, fake_db))
+    report_list = asyncio.run(
+        report_service_module.get_report_list(uuid.uuid4(), 3, 10, fake_db)
+    )
 
     assert report_list.total == 0
     assert report_list.items == []
@@ -178,21 +234,33 @@ def test_report_service_returns_empty_page_when_total_is_zero(monkeypatch: pytes
     assert report_list.total_pages == 0
 
 
-def test_report_service_raises_for_missing_report(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_report_service_raises_for_missing_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    report_service_module = importlib.reload(importlib.import_module("app.services.report_service"))
+    report_service_module = importlib.reload(
+        importlib.import_module("app.services.report_service")
+    )
     fake_db = AsyncMock()
     fake_db.execute = AsyncMock(return_value=_OneOrNoneResult(None))
 
     with pytest.raises(ReportNotFoundError):
-        asyncio.run(report_service_module.get_report_detail(uuid.uuid4(), uuid.uuid4(), fake_db))
+        asyncio.run(
+            report_service_module.get_report_detail(uuid.uuid4(), uuid.uuid4(), fake_db)
+        )
 
 
-def test_report_service_returns_empty_rag_summary_for_invalid_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_report_service_returns_empty_rag_summary_for_invalid_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    report_service_module = importlib.reload(importlib.import_module("app.services.report_service"))
+    report_service_module = importlib.reload(
+        importlib.import_module("app.services.report_service")
+    )
 
-    summary = report_service_module._build_rag_summary({"retrieval_results": [{"legacy": True}]})
+    summary = report_service_module._build_rag_summary(
+        {"retrieval_results": [{"legacy": True}]}
+    )
 
     assert summary.total_ingredients == 0
     assert summary.retrieved_count == 0
@@ -263,14 +331,19 @@ def test_reports_router_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
             created_at=datetime.now(timezone.utc),
         )
 
+    async def fake_delete_report(report_id_value, user_id, db) -> None:
+        assert report_id_value == report_id
+
     app.dependency_overrides[api_module.get_db] = override_db
     app.dependency_overrides[api_module.get_current_user] = override_user
     monkeypatch.setattr(api_module, "get_report_list", fake_get_report_list)
     monkeypatch.setattr(api_module, "get_report_detail", fake_get_report_detail)
+    monkeypatch.setattr(api_module, "delete_report", fake_delete_report)
 
     with TestClient(app) as client:
         list_response = client.get("/reports")
         detail_response = client.get(f"/reports/{report_id}")
+        delete_response = client.delete(f"/reports/{report_id}")
 
     assert list_response.status_code == 200
     assert list_response.json()["data"]["items"][0]["report_id"] == str(report_id)
@@ -279,4 +352,9 @@ def test_reports_router_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
     assert detail_payload["report_id"] == str(report_id)
     assert detail_payload["analysis"]["score"] == 80
     assert detail_payload["rag_summary"]["high_match_count"] == 1
-    assert detail_payload["artifact_urls"]["ocr_full_json_url"] == "https://example.com/ocr.json"
+    assert (
+        detail_payload["artifact_urls"]["ocr_full_json_url"]
+        == "https://example.com/ocr.json"
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"code": 0, "message": "ok", "data": None}

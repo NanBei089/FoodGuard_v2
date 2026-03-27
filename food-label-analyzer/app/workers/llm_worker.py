@@ -17,7 +17,6 @@ from app.workers.extractor.prompts.food_health_analysis import (
     build_food_health_analysis_repair_prompt,
 )
 
-
 logger = structlog.get_logger(__name__)
 
 _client: OpenAI | None = None
@@ -99,7 +98,11 @@ def analyze(
     prompt = build_food_health_analysis_prompt()
     inputs = _serialize_inputs(other_ocr_raw_text, nutrition_json, rag_results_json)
 
-    score_hint = f"\n\n【强制要求】健康评分必须使用规则计算分数: {rule_based_score}，不得自行计算。" if rule_based_score is not None else ""
+    score_hint = (
+        f"\n\n【强制要求】健康评分必须使用规则计算分数: {rule_based_score}，不得自行计算。"
+        if rule_based_score is not None
+        else ""
+    )
     prompt_with_hint = prompt + score_hint
 
     start = time.time()
@@ -148,7 +151,9 @@ def _repair(
         )
         raise LLMServiceError("LLM output repair failed after maximum retries")
 
-    logger.warning("llm_repair_triggered", retry=retry_count + 1, errors=validation_errors[:200])
+    logger.warning(
+        "llm_repair_triggered", retry=retry_count + 1, errors=validation_errors[:200]
+    )
     repair_prompt = build_food_health_analysis_repair_prompt()
     repair_inputs = {
         **original_inputs,

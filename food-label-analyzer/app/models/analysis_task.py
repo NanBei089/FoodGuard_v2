@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, String, TIMESTAMP, Text, desc
+from sqlalchemy import TIMESTAMP, ForeignKey, Index, String, Text, desc
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,13 +33,20 @@ class AnalysisTask(UUIDPrimaryKeyMixin, TimeStampMixin, Base):
     image_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     image_key: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[TaskStatus] = mapped_column(
-        PgEnum(TaskStatus, name="task_status", create_type=True, values_callable=lambda x: [e.value for e in x]),
+        PgEnum(
+            TaskStatus,
+            name="task_status",
+            create_type=True,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         server_default=TaskStatus.PENDING.value,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
     user: Mapped["User"] = relationship(back_populates="tasks")
     report: Mapped["Report | None"] = relationship(
         back_populates="task",

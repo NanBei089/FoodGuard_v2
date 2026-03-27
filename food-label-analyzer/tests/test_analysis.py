@@ -15,12 +15,16 @@ from PIL import Image
 from starlette.datastructures import UploadFile
 
 from app.core.error_handlers import register_exception_handlers
-from app.core.errors import FileTooLargeError, InvalidFileTypeError, TooManyConcurrentTasksError
+from app.core.errors import (
+    FileTooLargeError,
+    InvalidFileTypeError,
+    TooManyConcurrentTasksError,
+)
 from app.models.analysis_task import AnalysisTask, TaskStatus
 from app.models.report import Report
 from app.models.user import User
 from app.schemas.analysis_data import SUPPORTED_HEALTH_ADVICE_GROUPS
-from app.workers.ocr_worker import OCRTextResult
+from app.workers.ocr_worker import OCRParallelResult, OCRTextResult, TableRecognitionResult
 from tests.conftest import load_required_env
 
 
@@ -78,28 +82,40 @@ def test_validate_file_accepts_png_and_rejects_invalid_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     load_required_env(monkeypatch)
-    task_service_module = importlib.reload(importlib.import_module("app.services.task_service"))
+    task_service_module = importlib.reload(
+        importlib.import_module("app.services.task_service")
+    )
 
-    payload, content_type = asyncio.run(task_service_module.validate_file(_upload_file("tiny.png", _png_bytes())))
+    payload, content_type = asyncio.run(
+        task_service_module.validate_file(_upload_file("tiny.png", _png_bytes()))
+    )
     assert content_type == "image/png"
     assert payload.startswith(b"\x89PNG")
 
     with pytest.raises(InvalidFileTypeError):
-        asyncio.run(task_service_module.validate_file(_upload_file("bad.png", b"not-an-image")))
+        asyncio.run(
+            task_service_module.validate_file(_upload_file("bad.png", b"not-an-image"))
+        )
 
 
 def test_validate_file_rejects_large_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    task_service_module = importlib.reload(importlib.import_module("app.services.task_service"))
+    task_service_module = importlib.reload(
+        importlib.import_module("app.services.task_service")
+    )
     oversized = b"x" * ((10 * 1024 * 1024) + 1)
 
     with pytest.raises(FileTooLargeError):
-        asyncio.run(task_service_module.validate_file(_upload_file("big.png", oversized)))
+        asyncio.run(
+            task_service_module.validate_file(_upload_file("big.png", oversized))
+        )
 
 
 def test_check_concurrent_limit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
-    task_service_module = importlib.reload(importlib.import_module("app.services.task_service"))
+    task_service_module = importlib.reload(
+        importlib.import_module("app.services.task_service")
+    )
     fake_db = AsyncMock()
     fake_db.execute = AsyncMock(return_value=_ScalarResult(3))
 
@@ -107,9 +123,13 @@ def test_check_concurrent_limit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
         asyncio.run(task_service_module.check_concurrent_limit(uuid.uuid4(), fake_db))
 
 
-def test_get_task_status_payload_includes_report_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_task_status_payload_includes_report_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    task_service_module = importlib.reload(importlib.import_module("app.services.task_service"))
+    task_service_module = importlib.reload(
+        importlib.import_module("app.services.task_service")
+    )
     task = AnalysisTask(
         user_id=uuid.uuid4(),
         image_key="uploads/u/test.png",
@@ -129,11 +149,13 @@ def test_get_task_status_payload_includes_report_metadata(monkeypatch: pytest.Mo
     report.id = uuid.uuid4()
     task.report = report
 
-    payload = asyncio.run(task_service_module.get_task_status_payload(task, AsyncMock()))
+    payload = asyncio.run(
+        task_service_module.get_task_status_payload(task, AsyncMock())
+    )
 
     assert payload.report_id == report.id
     assert payload.nutrition_parse_source == "ocr_text"
-    assert payload.progress_message == "分析已完成"
+    assert payload.progress_message == "分析完成"
 
 
 def test_analysis_upload_route_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,7 +174,9 @@ def test_analysis_upload_route_success(monkeypatch: pytest.MonkeyPatch) -> None:
         created_at=datetime.now(timezone.utc),
     )
     storage = SimpleNamespace(
-        upload_image=AsyncMock(return_value=("uploads/key.png", "https://example.com/key.png")),
+        upload_image=AsyncMock(
+            return_value=("uploads/key.png", "https://example.com/key.png")
+        ),
         delete_image=AsyncMock(),
     )
 
@@ -164,7 +188,9 @@ def test_analysis_upload_route_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     app.dependency_overrides[api_module.get_db] = override_db
     app.dependency_overrides[api_module.get_current_user] = override_user
-    monkeypatch.setattr(api_module, "validate_file", AsyncMock(return_value=(b"img", "image/png")))
+    monkeypatch.setattr(
+        api_module, "validate_file", AsyncMock(return_value=(b"img", "image/png"))
+    )
     monkeypatch.setattr(api_module, "check_concurrent_limit", AsyncMock())
     monkeypatch.setattr(api_module, "get_storage_service", lambda: storage)
     monkeypatch.setattr(api_module, "create_task", AsyncMock(return_value=fake_task))
@@ -184,7 +210,7 @@ def test_analysis_upload_route_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["data"]["task_id"] == str(fake_task.id)
-    assert payload["data"]["status"] == "pending"
+    assert payload["data"]["status"] == "queued"
 
 
 def test_analysis_upload_route_rolls_back_when_enqueue_fails(
@@ -206,7 +232,9 @@ def test_analysis_upload_route_rolls_back_when_enqueue_fails(
         created_at=datetime.now(timezone.utc),
     )
     storage = SimpleNamespace(
-        upload_image=AsyncMock(return_value=("uploads/key.png", "https://example.com/key.png")),
+        upload_image=AsyncMock(
+            return_value=("uploads/key.png", "https://example.com/key.png")
+        ),
         delete_image=AsyncMock(),
     )
 
@@ -218,7 +246,9 @@ def test_analysis_upload_route_rolls_back_when_enqueue_fails(
 
     app.dependency_overrides[api_module.get_db] = override_db
     app.dependency_overrides[api_module.get_current_user] = override_user
-    monkeypatch.setattr(api_module, "validate_file", AsyncMock(return_value=(b"img", "image/png")))
+    monkeypatch.setattr(
+        api_module, "validate_file", AsyncMock(return_value=(b"img", "image/png"))
+    )
     monkeypatch.setattr(api_module, "check_concurrent_limit", AsyncMock())
     monkeypatch.setattr(api_module, "get_storage_service", lambda: storage)
     monkeypatch.setattr(api_module, "create_task", AsyncMock(return_value=fake_task))
@@ -243,14 +273,20 @@ def test_process_image_task_marks_failed_for_not_implemented(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     load_required_env(monkeypatch)
-    analysis_task_module = importlib.reload(importlib.import_module("app.tasks.analysis_task"))
+    analysis_task_module = importlib.reload(
+        importlib.import_module("app.tasks.analysis_task")
+    )
     statuses: list[tuple[TaskStatus, str | None]] = []
 
-    def fake_update(task_id: str, status: TaskStatus, error_message: str | None = None) -> None:
+    def fake_update(
+        task_id: str, status: TaskStatus, error_message: str | None = None
+    ) -> None:
         statuses.append((status, error_message))
 
     monkeypatch.setattr(analysis_task_module, "_update_task_status", fake_update)
-    monkeypatch.setattr(analysis_task_module, "_download_image", lambda image_key: b"img")
+    monkeypatch.setattr(
+        analysis_task_module, "_download_image", lambda image_key: b"img"
+    )
     monkeypatch.setattr(
         analysis_task_module.yolo_worker,
         "detect",
@@ -258,7 +294,9 @@ def test_process_image_task_marks_failed_for_not_implemented(
     )
     analysis_task_module.process_image_task.push_request(id="celery-1", retries=0)
     try:
-        result = analysis_task_module.process_image_task.run("task-id", "image-key", str(uuid.uuid4()))
+        result = analysis_task_module.process_image_task.run(
+            "task-id", "image-key", str(uuid.uuid4())
+        )
     finally:
         analysis_task_module.process_image_task.pop_request()
 
@@ -267,15 +305,21 @@ def test_process_image_task_marks_failed_for_not_implemented(
     assert statuses[-1][0] == TaskStatus.FAILED
 
 
-def test_process_image_task_retries_retryable_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_process_image_task_retries_retryable_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    analysis_task_module = importlib.reload(importlib.import_module("app.tasks.analysis_task"))
+    analysis_task_module = importlib.reload(
+        importlib.import_module("app.tasks.analysis_task")
+    )
     statuses: list[tuple[TaskStatus, str | None]] = []
 
     class RetryTriggered(Exception):
         pass
 
-    def fake_update(task_id: str, status: TaskStatus, error_message: str | None = None) -> None:
+    def fake_update(
+        task_id: str, status: TaskStatus, error_message: str | None = None
+    ) -> None:
         statuses.append((status, error_message))
 
     def fake_retry(*, exc: Exception, countdown: int) -> None:
@@ -285,27 +329,41 @@ def test_process_image_task_retries_retryable_errors(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         analysis_task_module,
         "_download_image",
-        lambda image_key: (_ for _ in ()).throw(analysis_task_module.StorageServiceError("storage down")),
+        lambda image_key: (_ for _ in ()).throw(
+            analysis_task_module.StorageServiceError("storage down")
+        ),
     )
     monkeypatch.setattr(analysis_task_module.process_image_task, "retry", fake_retry)
     analysis_task_module.process_image_task.push_request(id="celery-1", retries=0)
     try:
         with pytest.raises(RetryTriggered):
-            analysis_task_module.process_image_task.run("task-id", "image-key", str(uuid.uuid4()))
+            analysis_task_module.process_image_task.run(
+                "task-id", "image-key", str(uuid.uuid4())
+            )
     finally:
         analysis_task_module.process_image_task.pop_request()
 
     assert statuses == [(TaskStatus.PROCESSING, None)]
 
 
-def test_process_image_task_completes_with_report_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_process_image_task_completes_with_report_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
-    analysis_task_module = importlib.reload(importlib.import_module("app.tasks.analysis_task"))
+    analysis_task_module = importlib.reload(
+        importlib.import_module("app.tasks.analysis_task")
+    )
     completions: list[dict[str, object]] = []
 
-    monkeypatch.setattr(analysis_task_module, "_update_task_status", lambda *args, **kwargs: None)
-    monkeypatch.setattr(analysis_task_module, "_download_image", lambda image_key: b"img")
-    monkeypatch.setattr(analysis_task_module.yolo_worker, "detect", lambda image_bytes: [])
+    monkeypatch.setattr(
+        analysis_task_module, "_update_task_status", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        analysis_task_module, "_download_image", lambda image_key: b"img"
+    )
+    monkeypatch.setattr(
+        analysis_task_module.yolo_worker, "detect", lambda image_bytes: None
+    )
     monkeypatch.setattr(
         analysis_task_module.ocr_worker,
         "recognize_full_text",
@@ -317,9 +375,17 @@ def test_process_image_task_completes_with_report_payload(monkeypatch: pytest.Mo
         ),
     )
     monkeypatch.setattr(
+        analysis_task_module.ocr_worker,
+        "recognize_parallel",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+    monkeypatch.setattr(
         analysis_task_module.nutrition_extractor,
         "parse",
-        lambda table_result, ocr_fallback_text=None: {"items": [], "parse_method": "ocr_text"},
+        lambda table_result, ocr_fallback_text=None: {
+            "items": [],
+            "parse_method": "ocr_text",
+        },
     )
     monkeypatch.setattr(
         analysis_task_module.ingredient_extractor,
@@ -351,14 +417,126 @@ def test_process_image_task_completes_with_report_payload(monkeypatch: pytest.Mo
     def fake_complete(**kwargs):
         completions.append(kwargs)
 
-    monkeypatch.setattr(analysis_task_module, "_complete_task_with_report", fake_complete)
+    monkeypatch.setattr(
+        analysis_task_module, "_complete_task_with_report", fake_complete
+    )
     analysis_task_module.process_image_task.push_request(id="celery-1", retries=0)
     try:
-        result = analysis_task_module.process_image_task.run("task-id", "image-key", str(uuid.uuid4()))
+        result = analysis_task_module.process_image_task.run(
+            "task-id", "image-key", str(uuid.uuid4())
+        )
     finally:
         analysis_task_module.process_image_task.pop_request()
 
     assert result["status"] == "completed"
     assert completions[0]["score"] == 88
     assert completions[0]["nutrition_json"]["parse_method"] == "ocr_text"
-    assert completions[0]["artifact_urls"] == {"ocr_full_json_url": "https://example.com/ocr.json"}
+    assert completions[0]["artifact_urls"] == {
+        "ocr_full_json_url": "https://example.com/ocr.json"
+    }
+
+
+def test_process_image_task_runs_parallel_ocr_when_yolo_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    load_required_env(monkeypatch)
+    analysis_task_module = importlib.reload(
+        importlib.import_module("app.tasks.analysis_task")
+    )
+    completions: list[dict[str, object]] = []
+    parallel_inputs: list[tuple[bytes, bytes]] = []
+
+    monkeypatch.setattr(
+        analysis_task_module, "_update_task_status", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        analysis_task_module, "_download_image", lambda image_key: b"img"
+    )
+    monkeypatch.setattr(
+        analysis_task_module.yolo_worker,
+        "detect",
+        lambda image_bytes: {"x1": 1, "y1": 2, "x2": 3, "y2": 4, "confidence": 0.9},
+    )
+    monkeypatch.setattr(
+        analysis_task_module.yolo_worker,
+        "crop_image",
+        lambda image_bytes, bbox: b"cropped-img",
+    )
+    monkeypatch.setattr(
+        analysis_task_module.yolo_worker,
+        "mask_image",
+        lambda image_bytes, bbox: b"masked-img",
+    )
+    monkeypatch.setattr(
+        analysis_task_module.ocr_worker,
+        "recognize_parallel",
+        lambda full_text_image_bytes, nutrition_image_bytes=None: (
+            parallel_inputs.append((full_text_image_bytes, nutrition_image_bytes))
+            or OCRParallelResult(
+                full_text=OCRTextResult(
+                    raw_text="salt, sugar",
+                    lines=[{"text": "salt, sugar"}],
+                    blocks=[],
+                    artifact_json_url="https://example.com/ocr.json",
+                ),
+                nutrition_table=TableRecognitionResult(
+                    table_json={"table": [{"name": "energy", "value": "120", "unit": "kJ"}]},
+                    ocr_fallback_text="energy 120kJ 2%",
+                ),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        analysis_task_module.ocr_worker,
+        "recognize_full_text",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+    monkeypatch.setattr(
+        analysis_task_module.nutrition_extractor,
+        "parse",
+        lambda table_result, ocr_fallback_text=None: {
+            "items": [],
+            "parse_method": "table_recognition",
+        },
+    )
+    monkeypatch.setattr(
+        analysis_task_module.ingredient_extractor,
+        "extract",
+        lambda full_raw_text: (["salt", "sugar"], "salt, sugar"),
+    )
+    monkeypatch.setattr(
+        analysis_task_module.rag_worker,
+        "retrieve_all",
+        lambda ingredient_terms, ingredients_text: {
+            "source_file": "chromadb",
+            "ingredients_text": ingredients_text,
+            "items_total": 0,
+            "retrieval_results": [],
+        },
+    )
+    monkeypatch.setattr(
+        analysis_task_module.llm_worker,
+        "analyze",
+        lambda other_ocr_raw_text, nutrition_json, rag_results_json: {
+            "score": 88,
+            "summary": "S" * 60,
+            "top_risks": ["salt"],
+            "ingredients": [],
+            "health_advice": _health_advice_payload(),
+        },
+    )
+
+    monkeypatch.setattr(
+        analysis_task_module, "_complete_task_with_report", lambda **kwargs: completions.append(kwargs)
+    )
+    analysis_task_module.process_image_task.push_request(id="celery-1", retries=0)
+    try:
+        result = analysis_task_module.process_image_task.run(
+            "task-id", "image-key", str(uuid.uuid4())
+        )
+    finally:
+        analysis_task_module.process_image_task.pop_request()
+
+    assert result["status"] == "completed"
+    assert parallel_inputs == [(b"masked-img", b"cropped-img")]
+    assert completions[0]["nutrition_json"]["parse_method"] == "table_recognition"

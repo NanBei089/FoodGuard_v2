@@ -10,7 +10,6 @@ import structlog
 from app.core.config import get_settings
 from app.core.errors import EmbeddingServiceError
 
-
 logger = structlog.get_logger(__name__)
 _HTTP_CLIENT: httpx.Client | None = None
 _http_client_lock = None
@@ -27,12 +26,15 @@ def _get_http_client() -> httpx.Client:
         with _http_client_lock:
             if _HTTP_CLIENT is None:
                 settings = get_settings()
-                _HTTP_CLIENT = httpx.Client(timeout=float(settings.OLLAMA_EMBEDDING_TIMEOUT_S))
+                _HTTP_CLIENT = httpx.Client(
+                    timeout=float(settings.OLLAMA_EMBEDDING_TIMEOUT_S)
+                )
     return _HTTP_CLIENT
 
 
 def _normalize_text(value: Any) -> str:
     import unicodedata
+
     text = "" if value is None else str(value)
     text = unicodedata.normalize("NFKC", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -60,7 +62,9 @@ def _embed(text: str) -> list[float]:
     except httpx.HTTPError as exc:
         raise EmbeddingServiceError("Ollama embedding request failed") from exc
     except ValueError as exc:
-        raise EmbeddingServiceError("Ollama embedding response is not valid JSON") from exc
+        raise EmbeddingServiceError(
+            "Ollama embedding response is not valid JSON"
+        ) from exc
 
     embeddings = data.get("embeddings")
     if not isinstance(embeddings, list) or not embeddings:
@@ -68,12 +72,16 @@ def _embed(text: str) -> list[float]:
 
     first_vector = embeddings[0]
     if not isinstance(first_vector, list) or not first_vector:
-        raise EmbeddingServiceError("Ollama embedding response contains an invalid vector")
+        raise EmbeddingServiceError(
+            "Ollama embedding response contains an invalid vector"
+        )
 
     try:
         return [float(item) for item in first_vector]
     except (TypeError, ValueError) as exc:
-        raise EmbeddingServiceError("Ollama embedding vector contains non-numeric values") from exc
+        raise EmbeddingServiceError(
+            "Ollama embedding vector contains non-numeric values"
+        ) from exc
 
 
 def _embed_text(text: str) -> list[float]:
@@ -122,10 +130,14 @@ def _build_rag_match(item: dict[str, Any], term: str, index: int) -> dict[str, A
     return {
         "id": str(item.get("id", "")),
         "term": _extract_match_term(meta, normalized_term),
-        "normalized_term": _normalize_text(meta.get("normalized_term", normalized_term)),
+        "normalized_term": _normalize_text(
+            meta.get("normalized_term", normalized_term)
+        ),
         "aliases": _coerce_aliases(meta.get("aliases")),
         "function_category": _extract_function_category(meta),
-        "is_primary": bool(meta.get("is_primary")) if "is_primary" in meta else index == 0,
+        "is_primary": (
+            bool(meta.get("is_primary")) if "is_primary" in meta else index == 0
+        ),
         "similarity_score": _similarity_from_distance(item.get("distance")),
     }
 
@@ -278,7 +290,9 @@ def retrieve_all(
         ingredient_matches = retrieve_all_ingredients(term, top_k=top_k_ingredients)
         standard_matches = query_gb2760_by_keyword(term, top_k=top_k_per_term)
         combined = ingredient_matches + standard_matches
-        matches = [_build_rag_match(item, term, index) for index, item in enumerate(combined)]
+        matches = [
+            _build_rag_match(item, term, index) for index, item in enumerate(combined)
+        ]
         retrieval_items.append(
             {
                 "raw_term": term,
@@ -291,8 +305,13 @@ def retrieve_all(
 
     if not retrieval_items and ingredients_text.strip():
         fallback_term = _normalize_term(ingredients_text)
-        fallback_matches = retrieve_all_ingredients(fallback_term, top_k=top_k_ingredients)
-        matches = [_build_rag_match(item, fallback_term, index) for index, item in enumerate(fallback_matches)]
+        fallback_matches = retrieve_all_ingredients(
+            fallback_term, top_k=top_k_ingredients
+        )
+        matches = [
+            _build_rag_match(item, fallback_term, index)
+            for index, item in enumerate(fallback_matches)
+        ]
         retrieval_items.append(
             {
                 "raw_term": fallback_term,
@@ -342,7 +361,11 @@ def check_additive_safety(
         )
 
     best_match = details[0] if details else {}
-    safety_status = "permitted" if (best_match.get("similarity_score", 0) > 0.8) else "review_required"
+    safety_status = (
+        "permitted"
+        if (best_match.get("similarity_score", 0) > 0.8)
+        else "review_required"
+    )
 
     return {
         "additive": additive_name,

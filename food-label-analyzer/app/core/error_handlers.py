@@ -8,12 +8,75 @@ from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 from app.core.errors import AppBaseException
 
-
 logger = structlog.get_logger(__name__)
+
+_VALIDATION_FIELD_LABELS = {
+    "email": "邮箱",
+    "code": "验证码",
+    "password": "密码",
+    "new_password": "新密码",
+    "current_password": "当前密码",
+    "page": "页码",
+}
 
 
 def _get_request_id(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
+
+
+def _translate_validation_message(field: str, error: dict[str, object]) -> str:
+    message = str(error.get("msg", "") or "")
+    error_type = str(error.get("type", "") or "")
+    context = error.get("ctx")
+    if not isinstance(context, dict):
+        context = {}
+
+    label = _VALIDATION_FIELD_LABELS.get(field, field or "参数")
+    normalized_message = message.lower()
+
+    if error_type == "missing":
+        return f"请填写{label}"
+
+    if field == "email":
+        return "请输入有效的邮箱地址"
+
+    if field == "code" and error_type in {
+        "string_pattern_mismatch",
+        "string_too_short",
+        "string_too_long",
+    }:
+        return "验证码必须是 6 位数字"
+
+    if field in {"password", "new_password"}:
+        if "uppercase, lowercase, and digit characters" in normalized_message:
+            return "密码必须同时包含大写字母、小写字母和数字"
+        if error_type == "string_too_short":
+            return "密码长度不能少于 8 位"
+        if error_type == "string_too_long":
+            return "密码长度不能超过 32 位"
+
+    if error_type == "string_too_short":
+        min_length = context.get("min_length")
+        if isinstance(min_length, int):
+            return f"{label}长度不能少于 {min_length} 位"
+        return f"{label}长度过短"
+
+    if error_type == "string_too_long":
+        max_length = context.get("max_length")
+        if isinstance(max_length, int):
+            return f"{label}长度不能超过 {max_length} 位"
+        return f"{label}长度过长"
+
+    if error_type == "int_parsing":
+        return f"{label}必须是整数"
+
+    if error_type == "string_pattern_mismatch":
+        return f"{label}格式不正确"
+
+    if message.startswith("Value error, "):
+        return message.replace("Value error, ", "", 1)
+
+    return message or "请求参数错误"
 
 
 def _format_validation_errors(exc: RequestValidationError) -> list[dict[str, str]]:
@@ -24,11 +87,25 @@ def _format_validation_errors(exc: RequestValidationError) -> list[dict[str, str
         formatted.append(
             {
                 "field": field,
-                "message": error.get("msg", ""),
+                "message": _translate_validation_message(field, error),
                 "type": error.get("type", ""),
             }
         )
     return formatted
+
+
+def _summarize_validation_errors(errors: list[dict[str, str]]) -> str:
+    messages: list[str] = []
+    for item in errors:
+        message = item.get("message", "").strip()
+        if message and message not in messages:
+            messages.append(message)
+
+    if not messages:
+        return "请求参数错误"
+    if len(messages) == 1:
+        return messages[0]
+    return "；".join(messages[:3])
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -61,6 +138,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         exc: RequestValidationError,
     ) -> JSONResponse:
         formatted_errors = _format_validation_errors(exc)
+        summary_message = _summarize_validation_errors(formatted_errors)
         logger.warning(
             "request_validation_failed",
             path=request.url.path,
@@ -72,7 +150,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=422,
             content={
                 "code": 4220,
-                "message": "请求参数错误",
+                "message": summary_message,
                 "data": {"errors": formatted_errors},
             },
         )

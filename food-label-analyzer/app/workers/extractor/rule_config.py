@@ -6,9 +6,15 @@ REGEX_FLAGS = re.IGNORECASE
 
 INGREDIENT_TEXT_LIMIT = 500
 SPACE_RE = re.compile(r"\s+")
-TOPIC_TRIM_EDGE_RE = re.compile(r"^[\s:：;；，,、。.!！？?\-]+|[\s:：;；，,、。.!！？?\-]+$")
-INGREDIENT_NOISE_EDGE_RE = re.compile(r"^[\s:：;；，,、。.!！？?\-*]+|[\s:：;；，,、。.!！？?\-*]+$")
-NOISE_LINE_RE = re.compile(r'^(?:详情请见扫码后活动规则|[0-9\s"]{6,}|本产品由盒马及盒马认可的经销商专卖)$')
+TOPIC_TRIM_EDGE_RE = re.compile(
+    r"^[\s:：;；，,、。.!！？?\-]+|[\s:：;；，,、。.!！？?\-]+$"
+)
+INGREDIENT_NOISE_EDGE_RE = re.compile(
+    r"^[\s:：;；，,、。.!！？?\-*]+|[\s:：;；，,、。.!！？?\-*]+$"
+)
+NOISE_LINE_RE = re.compile(
+    r'^(?:详情请见扫码后活动规则|[0-9\s"]{6,}|本产品由盒马及盒马认可的经销商专卖)$'
+)
 
 INGREDIENT_START_LABEL_PATTERNS: tuple[str, ...] = (
     r"配\s*料\s*表?",
@@ -75,7 +81,9 @@ INGREDIENT_MARKETING_END_PATTERNS: tuple[str, ...] = (
 )
 
 INGREDIENT_VALID_TERM_RE = re.compile(r"[\u4e00-\u9fffA-Za-z0-9]")
-INGREDIENT_WRAPPED_TOKEN_RE = re.compile(r"^(?P<outer>[^()（）]+?)[（(](?P<inner>.+)[）)]$")
+INGREDIENT_WRAPPED_TOKEN_RE = re.compile(
+    r"^(?P<outer>[^()（）]+?)[（(](?P<inner>.+)[）)]$"
+)
 INGREDIENT_CATEGORY_WRAPPER_RE = re.compile(r"^(食品添加剂|复配食品添加剂)$")
 INGREDIENT_MEASURE_SUFFIX_RE = re.compile(
     r"(?:≥|≤|约|不少于)?\s*\d+(?:\.\d+)?\s*(?:%|％|g|kg|克|千克|ml|mL|ML|毫升|升)$",
@@ -207,8 +215,12 @@ def _compile_union(*parts: str, suffix: str = "") -> re.Pattern[str]:
     return re.compile(f"(?P<anchor>{'|'.join(parts)}){suffix}", REGEX_FLAGS)
 
 
-INGREDIENT_LABEL_RE = _compile_union(*INGREDIENT_START_LABEL_PATTERNS, suffix=r"\s*[:：]?")
-INLINE_INGREDIENT_LABEL_RE = _compile_union(*INGREDIENT_START_LABEL_PATTERNS, suffix=r"\s*[:：]")
+INGREDIENT_LABEL_RE = _compile_union(
+    *INGREDIENT_START_LABEL_PATTERNS, suffix=r"\s*[:：]?"
+)
+INLINE_INGREDIENT_LABEL_RE = _compile_union(
+    *INGREDIENT_START_LABEL_PATTERNS, suffix=r"\s*[:：]"
+)
 INGREDIENT_END_RE = _compile_union(
     *INGREDIENT_SECTION_END_PATTERNS,
     *INGREDIENT_NOTE_PATTERNS,

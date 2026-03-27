@@ -12,7 +12,6 @@ from minio.error import S3Error
 from app.core.config import get_settings
 from app.core.errors import StorageServiceError
 
-
 logger = structlog.get_logger(__name__)
 
 _CONTENT_TYPE_EXTENSIONS = {
@@ -26,21 +25,27 @@ class StorageService:
     def __init__(self) -> None:
         settings = get_settings()
         self._bucket_name = settings.MINIO_BUCKET_NAME
+        self._bucket_ready = False
         self._client = Minio(
-            endpoint=settings.MINIO_ENDPOINT,
+            endpoint=settings.minio_client_endpoint,
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY.get_secret_value(),
             secure=settings.MINIO_USE_SSL,
         )
 
     async def ensure_bucket(self) -> None:
+        if self._bucket_ready:
+            return
         try:
-            exists = await asyncio.to_thread(self._client.bucket_exists, self._bucket_name)
+            exists = await asyncio.to_thread(
+                self._client.bucket_exists, self._bucket_name
+            )
             if not exists:
                 await asyncio.to_thread(self._client.make_bucket, self._bucket_name)
                 logger.info("minio_bucket_created", bucket=self._bucket_name)
             else:
                 logger.info("minio_bucket_exists", bucket=self._bucket_name)
+            self._bucket_ready = True
         except Exception as exc:
             raise self._raise_storage_error("Failed to ensure bucket", exc)
 
@@ -71,7 +76,9 @@ class StorageService:
         except Exception as exc:
             raise self._raise_storage_error("Failed to upload image", exc)
 
-    async def upload_artifact(self, data: bytes, object_key: str, content_type: str) -> str:
+    async def upload_artifact(
+        self, data: bytes, object_key: str, content_type: str
+    ) -> str:
         await self.ensure_bucket()
         try:
             await asyncio.to_thread(
@@ -100,7 +107,9 @@ class StorageService:
 
     async def delete_image(self, image_key: str) -> None:
         try:
-            await asyncio.to_thread(self._client.remove_object, self._bucket_name, image_key)
+            await asyncio.to_thread(
+                self._client.remove_object, self._bucket_name, image_key
+            )
             logger.info("image_deleted", image_key=image_key)
         except Exception as exc:
             raise self._raise_storage_error("Failed to delete image", exc)

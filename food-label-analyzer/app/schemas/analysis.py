@@ -1,37 +1,52 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from app.schemas.common import BASE_MODEL_CONFIG
 
-
 STATUS_MESSAGES = {
-    "pending": "任务已创建，等待分析",
-    "processing": "系统正在分析上传图片",
-    "completed": "分析已完成",
-    "failed": "分析失败",
+    "queued": "任务排队中，请稍候...",
+    "processing": "正在分析食品标签...",
+    "completed": "分析完成",
+    "failed": "分析失败，请重新上传图片",
 }
+
+INTERNAL_TO_EXTERNAL_STATUS = {
+    "pending": "queued",
+    "processing": "processing",
+    "completed": "completed",
+    "failed": "failed",
+}
+
+NutritionParseSourceLiteral = Literal[
+    "table_recognition", "ocr_text", "llm_fallback", "empty", "failed"
+]
+
+
+def to_external_task_status(internal_status: str) -> str:
+    return INTERNAL_TO_EXTERNAL_STATUS.get(internal_status, internal_status)
 
 
 def sanitize_error_message(internal_error: str | None) -> str | None:
-    if not internal_error:
+    if internal_error is None:
         return None
 
     normalized = internal_error.lower()
-    if "timeout" in normalized or "softtimelimit" in normalized:
-        return "分析超时，请稍后重试。"
-    if "storage" in normalized or "minio" in normalized:
-        return "存储服务暂时不可用。"
+    if (
+        "超时" in internal_error
+        or "timeout" in normalized
+        or "softtimelimit" in normalized
+    ):
+        return "任务处理超时，请重新上传"
+    if "重试" in internal_error or "retry" in normalized:
+        return "服务暂时繁忙，请稍后重试"
     if "ocr" in normalized or "table" in normalized:
-        return "OCR 服务暂时不可用。"
-    if "llm" in normalized or "deepseek" in normalized:
-        return "大模型服务暂时不可用。"
-    if "embedding" in normalized or "chroma" in normalized or "rag" in normalized:
-        return "知识检索服务暂时不可用。"
-    return "分析失败，请重新上传图片后再试。"
+        return "OCR 子系统暂时不可用，请稍后重试"
+    return "分析失败，请重新上传图片"
 
 
 class _AnalysisSchema(BaseModel):
@@ -39,26 +54,35 @@ class _AnalysisSchema(BaseModel):
 
 
 class TaskCreateResponse(_AnalysisSchema):
-    task_id: UUID = Field(description="Task identifier")
-    status: str = Field(description="Current task status", examples=["pending"])
-    created_at: datetime = Field(description="Task creation time", examples=["2026-03-25T12:30:00Z"])
+    task_id: UUID = Field(description="任务 ID")
+    status: Literal["queued"] = Field(
+        default="queued", description="对外任务状态", examples=["queued"]
+    )
+    created_at: datetime = Field(
+        description="任务创建时间", examples=["2026-03-25T12:30:00Z"]
+    )
 
 
 class TaskStatusResponse(_AnalysisSchema):
-    task_id: UUID = Field(description="Task identifier")
-    status: str = Field(description="Current task status", examples=["processing"])
-    progress_message: str = Field(description="Human-readable task progress message")
-    created_at: datetime = Field(description="Task creation time", examples=["2026-03-25T12:30:00Z"])
+    task_id: UUID = Field(description="任务 ID")
+    status: Literal["queued", "processing", "completed", "failed"] = Field(
+        description="对外任务状态",
+        examples=["processing"],
+    )
+    progress_message: str = Field(description="任务进度描述")
+    created_at: datetime = Field(
+        description="任务创建时间", examples=["2026-03-25T12:30:00Z"]
+    )
     completed_at: datetime | None = Field(
         default=None,
-        description="Task completion time",
+        description="任务完成时间",
         examples=["2026-03-25T12:32:00Z"],
     )
-    report_id: UUID | None = Field(default=None, description="Generated report identifier")
-    error_message: str | None = Field(default=None, description="Sanitized error message")
-    nutrition_parse_source: str | None = Field(
+    report_id: UUID | None = Field(default=None, description="关联报告 ID")
+    error_message: str | None = Field(default=None, description="脱敏后的错误信息")
+    nutrition_parse_source: NutritionParseSourceLiteral | None = Field(
         default=None,
-        description="Nutrition parsing source when the report is available",
+        description="营养解析来源",
         examples=["table_recognition", "ocr_text"],
     )
 
@@ -68,4 +92,5 @@ __all__ = [
     "TaskCreateResponse",
     "TaskStatusResponse",
     "sanitize_error_message",
+    "to_external_task_status",
 ]

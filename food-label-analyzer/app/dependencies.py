@@ -13,7 +13,6 @@ from app.core.security import ACCESS_TOKEN_TYPE, decode_token
 from app.db.session import get_db
 from app.models.user import User
 
-
 settings = get_settings()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")

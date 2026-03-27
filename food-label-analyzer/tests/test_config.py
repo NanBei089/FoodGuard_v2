@@ -8,7 +8,6 @@ from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings, get_settings
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_EXAMPLE_PATH = PROJECT_ROOT / ".env.example"
 
@@ -34,7 +33,9 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(field_name, raising=False)
 
 
-def load_required_env(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> dict[str, str]:
+def load_required_env(
+    monkeypatch: pytest.MonkeyPatch, **overrides: str
+) -> dict[str, str]:
     clear_settings_env(monkeypatch)
     values = {**REQUIRED_ENV_VARS, **overrides}
     for key, value in values.items():
@@ -71,14 +72,18 @@ def test_settings_loads_from_environment(monkeypatch: pytest.MonkeyPatch) -> Non
     assert settings.OLLAMA_EMBEDDING_MODEL == "qwen3-embedding:latest"
 
 
-def test_required_fields_raise_validation_error_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_required_fields_raise_validation_error_when_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     clear_settings_env(monkeypatch)
 
     with pytest.raises(ValidationError):
         Settings()
 
 
-def test_secret_fields_are_stored_as_secret_str(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_secret_fields_are_stored_as_secret_str(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(monkeypatch)
 
     settings = Settings()
@@ -88,10 +93,15 @@ def test_secret_fields_are_stored_as_secret_str(monkeypatch: pytest.MonkeyPatch)
     assert isinstance(settings.PADDLEOCR_TOKEN, SecretStr)
     assert isinstance(settings.MINIO_SECRET_KEY, SecretStr)
     assert isinstance(settings.SMTP_PASSWORD, SecretStr)
-    assert settings.APP_SECRET_KEY.get_secret_value() == REQUIRED_ENV_VARS["APP_SECRET_KEY"]
+    assert (
+        settings.APP_SECRET_KEY.get_secret_value()
+        == REQUIRED_ENV_VARS["APP_SECRET_KEY"]
+    )
 
 
-def test_derived_properties_are_computed_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_derived_properties_are_computed_correctly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     load_required_env(
         monkeypatch,
         APP_ENV="development",
@@ -108,8 +118,16 @@ def test_derived_properties_are_computed_correctly(monkeypatch: pytest.MonkeyPat
     assert settings.jwt_access_expire_timedelta == timedelta(minutes=45)
     assert settings.jwt_refresh_expire_timedelta == timedelta(days=10)
     assert settings.max_upload_size_bytes == 12 * 1024 * 1024
-    assert settings.allowed_image_types_list == ["image/jpeg", "image/png", "image/webp"]
-    assert settings.cors_origins_list == ["http://localhost:3000", "http://localhost:5173"]
+    assert settings.allowed_image_types_list == [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    ]
+    assert settings.minio_client_endpoint == "127.0.0.1:9000"
+    assert settings.cors_origins_list == [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
 
 
 def test_cors_origins_list_supports_wildcard(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -125,7 +143,10 @@ def test_cors_origins_list_supports_wildcard(monkeypatch: pytest.MonkeyPatch) ->
     [
         ("APP_SECRET_KEY", "short"),
         ("DATABASE_URL", "postgresql://postgres:password@localhost:5432/food_analyzer"),
-        ("DATABASE_SYNC_URL", "postgresql+psycopg2://postgres:password@localhost:5432/food_analyzer"),
+        (
+            "DATABASE_SYNC_URL",
+            "postgresql+psycopg2://postgres:password@localhost:5432/food_analyzer",
+        ),
         ("REDIS_URL", "http://localhost:6379/0"),
         ("YOLO_CONFIDENCE_THRESHOLD", "1"),
         ("SMTP_PORT", "26"),

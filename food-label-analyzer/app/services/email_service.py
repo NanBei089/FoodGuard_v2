@@ -5,7 +5,6 @@ import structlog
 from app.core.config import get_settings
 from app.core.email import get_email_service
 
-
 logger = structlog.get_logger(__name__)
 
 

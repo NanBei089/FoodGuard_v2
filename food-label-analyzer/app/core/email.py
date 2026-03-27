@@ -5,10 +5,14 @@ from email.mime.text import MIMEText
 
 import aiosmtplib
 import structlog
-from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_fixed
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_fixed,
+)
 
 from app.core.config import Settings, get_settings
-
 
 logger = structlog.get_logger(__name__)
 

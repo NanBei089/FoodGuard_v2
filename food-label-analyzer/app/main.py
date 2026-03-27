@@ -25,7 +25,6 @@ from app.db.session import get_engine
 from app.schemas.common import ApiResponse, success_response
 from app.schemas.health import HealthCheckResponse, HealthServicesSchema
 
-
 APP_VERSION = "1.0.0"
 HEALTH_TIMEOUT_SECONDS = 2
 
@@ -46,7 +45,9 @@ def _redact_url(url: str) -> str:
         host = f"{host}:{parsed.port}"
 
     netloc = f"{auth}@{host}" if host else auth
-    return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+    return urlunsplit(
+        (parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment)
+    )
 
 
 def _build_config_summary(current_settings: Settings) -> dict[str, str | bool]:
@@ -68,7 +69,7 @@ def _build_config_summary(current_settings: Settings) -> dict[str, str | bool]:
 def _create_minio_client() -> Minio:
     current_settings = get_settings()
     return Minio(
-        endpoint=current_settings.MINIO_ENDPOINT,
+        endpoint=current_settings.minio_client_endpoint,
         access_key=current_settings.MINIO_ACCESS_KEY,
         secret_key=current_settings.MINIO_SECRET_KEY.get_secret_value(),
         secure=current_settings.MINIO_USE_SSL,
@@ -91,7 +92,9 @@ async def _check_redis_connection() -> None:
 async def _ensure_minio_bucket() -> None:
     current_settings = get_settings()
     client = _create_minio_client()
-    bucket_exists = await asyncio.to_thread(client.bucket_exists, current_settings.MINIO_BUCKET_NAME)
+    bucket_exists = await asyncio.to_thread(
+        client.bucket_exists, current_settings.MINIO_BUCKET_NAME
+    )
     if bucket_exists:
         logger.info("minio_bucket_exists", bucket=current_settings.MINIO_BUCKET_NAME)
         return
@@ -143,7 +146,9 @@ async def _probe_redis() -> None:
 
 async def _probe_minio() -> None:
     current_settings = get_settings()
-    await asyncio.to_thread(_create_minio_client().bucket_exists, current_settings.MINIO_BUCKET_NAME)
+    await asyncio.to_thread(
+        _create_minio_client().bucket_exists, current_settings.MINIO_BUCKET_NAME
+    )
 
 
 async def _probe_yolo_model() -> None:
@@ -154,7 +159,9 @@ async def _probe_yolo_model() -> None:
 async def _probe_chromadb() -> None:
     current_settings = get_settings()
     client = chromadb.PersistentClient(path=current_settings.CHROMADB_PATH)
-    collection = client.get_collection(name=current_settings.CHROMADB_COLLECTION_INGREDIENTS)
+    collection = client.get_collection(
+        name=current_settings.CHROMADB_COLLECTION_INGREDIENTS
+    )
     count = collection.count()
     if count <= 0:
         raise RuntimeError("collection is empty")
@@ -165,7 +172,9 @@ async def _probe_ollama_embedding() -> None:
     if not current_settings.HEALTH_CHECK_EXTERNAL:
         return
     async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT_SECONDS) as client:
-        response = await client.get(f"{current_settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags")
+        response = await client.get(
+            f"{current_settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags"
+        )
         response.raise_for_status()
 
 
@@ -177,7 +186,9 @@ async def _probe_ocr_runtime() -> None:
     token = current_settings.PADDLEOCR_TOKEN.get_secret_value()
     if token:
         headers["Authorization"] = f"bearer {token}"
-    async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT_SECONDS, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=HEALTH_TIMEOUT_SECONDS, follow_redirects=True
+    ) as client:
         response = await client.post(
             current_settings.PADDLEOCR_JOB_URL,
             headers=headers,
@@ -197,10 +208,16 @@ async def _build_health_payload() -> HealthCheckResponse:
         minio=await _run_with_timeout("minio", _probe_minio),
         yolo_model=await _run_with_timeout("yolo_model", _probe_yolo_model),
         chromadb=await _run_with_timeout("chromadb", _probe_chromadb),
-        ollama_embedding=await _run_with_timeout("ollama_embedding", _probe_ollama_embedding),
+        ollama_embedding=await _run_with_timeout(
+            "ollama_embedding", _probe_ollama_embedding
+        ),
         ocr_runtime=await _run_with_timeout("ocr_runtime", _probe_ocr_runtime),
     )
-    overall = "healthy" if all(value == "up" for value in services.model_dump().values()) else "degraded"
+    overall = (
+        "healthy"
+        if all(value == "up" for value in services.model_dump().values())
+        else "degraded"
+    )
     return HealthCheckResponse(
         status=overall,
         timestamp=datetime.now(timezone.utc),
@@ -247,7 +264,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
 )
@@ -274,7 +291,9 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     if _is_https_request(request):
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
     return response
 
 

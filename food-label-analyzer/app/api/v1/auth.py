@@ -10,6 +10,7 @@ from app.schemas.auth import (
     CooldownResponse,
     ForgotPasswordRequest,
     LoginRequest,
+    LogoutRequest,
     RefreshTokenRequest,
     RegisterRequest,
     ResetPasswordRequest,
@@ -19,13 +20,13 @@ from app.schemas.auth import (
 from app.schemas.common import ApiResponse, success_response
 from app.services.auth_service import (
     login_user,
+    logout_user,
     refresh_tokens,
     register_user,
     reset_password,
     send_register_code,
     send_reset_email,
 )
-
 
 router = APIRouter()
 
@@ -108,6 +109,24 @@ async def refresh(
 ) -> ApiResponse[TokenResponse]:
     tokens = await refresh_tokens(request.refresh_token, db)
     return success_response(tokens)
+
+
+@router.post(
+    "/logout",
+    response_model=ApiResponse[None],
+    summary="用户登出",
+    description="将当前 refresh token 标记为失效，重复登出保持幂等。",
+    responses={
+        200: {"description": "登出成功"},
+        401: {"description": "刷新令牌无效"},
+    },
+)
+async def logout(
+    request: LogoutRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[None]:
+    await logout_user(request.refresh_token, db)
+    return success_response(None)
 
 
 @router.post(

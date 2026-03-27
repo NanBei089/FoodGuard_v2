@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from pathlib import Path
 import runpy
 import uuid
+from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -15,9 +15,15 @@ from app.db.base import Base, CreatedAtMixin
 from app.models.analysis_task import AnalysisTask, TaskStatus
 from app.models.email_verification import EmailVerification, VerificationType
 from app.models.password_reset import PasswordResetToken
+from app.models.refresh_token import RefreshToken
 from app.models.report import Report
 from app.models.user import User
-from app.schemas.analysis_data import FoodHealthAnalysisOutput, NutritionData, RAGResults
+from app.models.user_preference import UserPreference
+from app.schemas.analysis_data import (
+    FoodHealthAnalysisOutput,
+    NutritionData,
+    RAGResults,
+)
 from tests.conftest import load_required_env
 
 
@@ -26,8 +32,10 @@ def test_doc02_metadata_and_mixins_register_expected_tables() -> None:
         "users",
         "email_verifications",
         "password_reset_tokens",
+        "refresh_tokens",
         "analysis_tasks",
         "reports",
+        "user_preferences",
     }
 
     assert expected_tables.issubset(set(Base.metadata.tables))
@@ -47,7 +55,13 @@ def test_user_and_task_models_define_expected_relationships_and_indexes() -> Non
         password_hash="hashed-password",
     )
 
-    assert set(user_relationships.keys()) == {"password_reset_tokens", "reports", "tasks"}
+    assert set(user_relationships.keys()) == {
+        "password_reset_tokens",
+        "preference",
+        "refresh_tokens",
+        "reports",
+        "tasks",
+    }
     assert set(task_relationships.keys()) == {"report", "user"}
     assert task_relationships["report"].uselist is False
     assert task_indexes == {
@@ -69,13 +83,22 @@ def test_user_and_task_models_define_expected_relationships_and_indexes() -> Non
     assert repr(user) == f"<User id={user.id} email={user.email}>"
 
 
-def test_report_and_auth_related_models_define_expected_columns_constraints_and_indexes() -> None:
+def test_report_and_auth_related_models_define_expected_columns_constraints_and_indexes() -> (
+    None
+):
     email_indexes = {index.name for index in EmailVerification.__table__.indexes}
     reset_indexes = {index.name for index in PasswordResetToken.__table__.indexes}
+    refresh_indexes = {index.name for index in RefreshToken.__table__.indexes}
     report_indexes = {index.name for index in Report.__table__.indexes}
-    report_constraints = {constraint.name for constraint in Report.__table__.constraints}
+    report_constraints = {
+        constraint.name for constraint in Report.__table__.constraints
+    }
 
     assert EmailVerification.__table__.c["type"].type.enum_class is VerificationType
+    assert EmailVerification.__table__.c["type"].type.enums == [
+        "register",
+        "reset_password",
+    ]
     assert email_indexes == {
         "idx_email_verifications_email_type",
         "idx_email_verifications_expired_at",
@@ -84,11 +107,29 @@ def test_report_and_auth_related_models_define_expected_columns_constraints_and_
         "idx_password_reset_tokens_expired_at",
         "idx_password_reset_tokens_user_id",
     }
-    assert list(PasswordResetToken.__table__.c["user_id"].foreign_keys)[0].ondelete == "CASCADE"
+    assert refresh_indexes == {
+        "idx_refresh_tokens_expires_at",
+        "idx_refresh_tokens_revoked_at",
+        "idx_refresh_tokens_user_id",
+    }
+    assert (
+        list(RefreshToken.__table__.c["user_id"].foreign_keys)[0].ondelete == "CASCADE"
+    )
+    assert (
+        list(UserPreference.__table__.c["user_id"].foreign_keys)[0].ondelete
+        == "CASCADE"
+    )
+    assert (
+        list(PasswordResetToken.__table__.c["user_id"].foreign_keys)[0].ondelete
+        == "CASCADE"
+    )
     assert isinstance(Report.__table__.c["nutrition_json"].type, JSONB)
     assert isinstance(Report.__table__.c["rag_results_json"].type, JSONB)
     assert isinstance(Report.__table__.c["llm_output_json"].type, JSONB)
     assert isinstance(Report.__table__.c["artifact_urls"].type, JSONB)
+    assert isinstance(UserPreference.__table__.c["focus_groups"].type, JSONB)
+    assert "deleted_at" in User.__table__.c
+    assert "deleted_at" in Report.__table__.c
     assert report_constraints >= {"ck_reports_score_range"}
     assert report_indexes == {"idx_reports_score", "idx_reports_user_id_created_at"}
     assert "created_at DESC" in str(
@@ -111,9 +152,12 @@ def test_analysis_data_schemas_validate_valid_payloads() -> None:
                     "value": "1500",
                     "unit": "kJ",
                     "daily_reference_percent": "18%",
+                    "level": "attention",
+                    "recommendation": "注意控制单次食用量",
                 },
             ],
             "serving_size": "每100g",
+            "advice_summary": "该食品能量不低，建议适量食用。",
             "parse_method": "table_recognition",
         },
     )
@@ -211,7 +255,10 @@ def test_analysis_data_schemas_validate_valid_payloads() -> None:
     )
 
     assert nutrition.parse_method == "table_recognition"
-    assert rag_results.retrieval_results[0].matches[0].similarity_score == pytest.approx(0.95)
+    assert nutrition.items[0].level == "attention"
+    assert rag_results.retrieval_results[0].matches[
+        0
+    ].similarity_score == pytest.approx(0.95)
     assert analysis.score == 72
     assert len(analysis.health_advice) == 5
 
@@ -300,7 +347,9 @@ def test_alembic_env_uses_settings_metadata_and_offline_comparison_flags(
         def get_main_option(self, key: str) -> str:
             return self.options[key]
 
-        def get_section(self, key: str, default: dict[str, str] | None = None) -> dict[str, str]:
+        def get_section(
+            self, key: str, default: dict[str, str] | None = None
+        ) -> dict[str, str]:
             return default or {}
 
     fake_config = FakeAlembicConfig()
@@ -314,13 +363,24 @@ def test_alembic_env_uses_settings_metadata_and_offline_comparison_flags(
 
     monkeypatch.setattr(alembic_context, "config", fake_config, raising=False)
     monkeypatch.setattr(alembic_context, "is_offline_mode", lambda: True)
-    monkeypatch.setattr(alembic_context, "configure", lambda **kwargs: captured.setdefault("configure", kwargs))
+    monkeypatch.setattr(
+        alembic_context,
+        "configure",
+        lambda **kwargs: captured.setdefault("configure", kwargs),
+    )
     monkeypatch.setattr(alembic_context, "begin_transaction", fake_begin_transaction)
-    monkeypatch.setattr(alembic_context, "run_migrations", lambda: captured.setdefault("ran_migrations", True))
+    monkeypatch.setattr(
+        alembic_context,
+        "run_migrations",
+        lambda: captured.setdefault("ran_migrations", True),
+    )
 
     env_globals = runpy.run_path(str(env_path))
 
-    assert fake_config.get_main_option("sqlalchemy.url") == get_settings().DATABASE_SYNC_URL
+    assert (
+        fake_config.get_main_option("sqlalchemy.url")
+        == get_settings().DATABASE_SYNC_URL
+    )
     assert env_globals["target_metadata"] is Base.metadata
     assert captured["ran_migrations"] is True
     assert captured["configure"]["compare_type"] is True

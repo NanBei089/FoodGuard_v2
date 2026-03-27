@@ -16,8 +16,12 @@ class AppBaseException(Exception):
         status_code: int | None = None,
         error_code: int | None = None,
     ) -> None:
-        self.status_code = status_code if status_code is not None else type(self).status_code
-        self.error_code = error_code if error_code is not None else type(self).error_code
+        self.status_code = (
+            status_code if status_code is not None else type(self).status_code
+        )
+        self.error_code = (
+            error_code if error_code is not None else type(self).error_code
+        )
         self.message = message if message is not None else type(self).message
         self.detail = detail
         super().__init__(self.message)

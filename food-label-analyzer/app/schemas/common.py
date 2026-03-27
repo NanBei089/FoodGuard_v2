@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import math
+from datetime import datetime, timezone
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer
-
 
 T = TypeVar("T")
 
 
 def serialize_datetime_to_z(value: datetime) -> str:
-    normalized = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    normalized = (
+        value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    )
     normalized = normalized.astimezone(timezone.utc)
     return normalized.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -29,7 +30,7 @@ class ApiResponse(BaseModel, Generic[T]):
     model_config = BASE_MODEL_CONFIG
 
     code: int = Field(default=0, description="业务状态码，0 表示成功", examples=[0])
-    message: str = Field(default="成功", description="响应消息", examples=["成功"])
+    message: str = Field(default="ok", description="响应消息", examples=["ok"])
     data: T | None = Field(default=None, description="响应数据")
 
     @field_serializer("data")
@@ -41,7 +42,7 @@ class ApiResponse(BaseModel, Generic[T]):
         return value
 
 
-def success_response(data: T | None, message: str = "成功") -> ApiResponse[T]:
+def success_response(data: T | None, message: str = "ok") -> ApiResponse[T]:
     return ApiResponse[T](message=message, data=data)
 
 

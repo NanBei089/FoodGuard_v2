@@ -22,7 +22,6 @@ from app.services.task_service import (
 )
 from app.tasks.celery_app import celery_app
 
-
 router = APIRouter()
 
 
@@ -71,7 +70,7 @@ async def upload_image(
     return success_response(
         TaskCreateResponse(
             task_id=task.id,
-            status=task.status.value,
+            status="queued",
             created_at=task.created_at,
         ),
         message="图片上传成功",

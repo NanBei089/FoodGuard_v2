@@ -25,7 +25,9 @@ def extract_ingredient_topic(
     clean_lines: list[str] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(clean_text, str) or not isinstance(flat_text, str):
-        raise ValueError("extract_ingredient_topic 需要 clean_text 与 flat_text 字符串输入。")
+        raise ValueError(
+            "extract_ingredient_topic 需要 clean_text 与 flat_text 字符串输入。"
+        )
 
     lines = _prepare_lines(clean_text=clean_text, clean_lines=clean_lines)
     if not lines:
@@ -93,19 +95,25 @@ def extract_other_topics(
 
     lines = _prepare_lines(clean_text=clean_text, clean_lines=clean_lines)
     if not lines:
-        return {topic_name: {"found": False, "text": ""} for topic_name in OTHER_TOPIC_ORDER}
+        return {
+            topic_name: {"found": False, "text": ""} for topic_name in OTHER_TOPIC_ORDER
+        }
 
     topics: dict[str, dict[str, Any]] = {}
     for topic_name in OTHER_TOPIC_ORDER:
         if topic_name in MANUFACTURER_GROUP_TOPICS:
             topics[topic_name] = _extract_manufacturer_topic(lines)
         else:
-            topics[topic_name] = _extract_single_line_topic(lines, OTHER_TOPIC_PATTERNS[topic_name])
+            topics[topic_name] = _extract_single_line_topic(
+                lines, OTHER_TOPIC_PATTERNS[topic_name]
+            )
     return topics
 
 
 def _prepare_lines(clean_text: str, clean_lines: list[str] | None) -> list[str]:
-    source_lines = clean_lines if isinstance(clean_lines, list) else clean_text.splitlines()
+    source_lines = (
+        clean_lines if isinstance(clean_lines, list) else clean_text.splitlines()
+    )
     prepared: list[str] = []
 
     for line in source_lines:
@@ -116,7 +124,9 @@ def _prepare_lines(clean_text: str, clean_lines: list[str] | None) -> list[str]:
     return prepared
 
 
-def _extract_single_line_topic(lines: list[str], pattern: re.Pattern[str]) -> dict[str, Any]:
+def _extract_single_line_topic(
+    lines: list[str], pattern: re.Pattern[str]
+) -> dict[str, Any]:
     for line in lines:
         if _is_noise_line(line):
             continue
@@ -153,7 +163,9 @@ def _trim_ingredient_fragment(text: str) -> tuple[str, str]:
 
     end_match = INGREDIENT_END_RE.search(normalized)
     if end_match:
-        return _normalize_text(normalized[: end_match.start()]), _normalize_anchor(end_match.group("anchor"))
+        return _normalize_text(normalized[: end_match.start()]), _normalize_anchor(
+            end_match.group("anchor")
+        )
 
     return normalized, ""
 

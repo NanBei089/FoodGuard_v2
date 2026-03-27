@@ -32,7 +32,6 @@ from app.core.security import (
     verify_password,
 )
 
-
 REQUIRED_ENV_VARS = {
     "APP_SECRET_KEY": "x" * 32,
     "DATABASE_URL": "postgresql+asyncpg://postgres:password@localhost:5432/food_analyzer",
@@ -100,7 +99,9 @@ def test_exception_defaults_and_overrides() -> None:
     assert overridden.message == "Task no longer exists"
 
 
-def test_app_exception_handler_returns_expected_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_app_exception_handler_returns_expected_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     app = _build_test_app(monkeypatch, debug=False)
 
     with TestClient(app) as client:
@@ -114,7 +115,9 @@ def test_app_exception_handler_returns_expected_shape(monkeypatch: pytest.Monkey
     }
 
 
-def test_cooldown_exception_returns_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cooldown_exception_returns_retry_after(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     app = _build_test_app(monkeypatch, debug=False)
 
     with TestClient(app) as client:
@@ -148,7 +151,9 @@ def test_email_not_verified_error_uses_403(monkeypatch: pytest.MonkeyPatch) -> N
     }
 
 
-def test_validation_exception_handler_formats_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validation_exception_handler_formats_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     app = _build_test_app(monkeypatch, debug=False)
 
     with TestClient(app) as client:
@@ -157,9 +162,10 @@ def test_validation_exception_handler_formats_errors(monkeypatch: pytest.MonkeyP
     payload = response.json()
     assert response.status_code == 422
     assert payload["code"] == 4220
-    assert payload["message"] == "请求参数错误"
+    assert payload["message"] == "页码必须是整数"
     assert payload["data"]["errors"]
     assert payload["data"]["errors"][0]["field"] == "page"
+    assert payload["data"]["errors"][0]["message"] == "页码必须是整数"
 
 
 def test_unhandled_exception_handler_hides_details_when_not_debug(
@@ -195,7 +201,9 @@ def test_unhandled_exception_handler_shows_details_when_debug(
     }
 
 
-def test_setup_logging_console_emits_structlog_output(capsys: pytest.CaptureFixture[str]) -> None:
+def test_setup_logging_console_emits_structlog_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     setup_logging("INFO", "console")
     capsys.readouterr()
 
@@ -259,14 +267,18 @@ def test_create_and_decode_refresh_token(monkeypatch: pytest.MonkeyPatch) -> Non
     assert payload["type"] == REFRESH_TOKEN_TYPE
 
 
-def test_decode_token_raises_token_invalid_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_decode_token_raises_token_invalid_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _load_required_env(monkeypatch)
 
     with pytest.raises(TokenInvalidError):
         decode_token("not-a-valid-token")
 
 
-def test_decode_token_raises_token_expired_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_decode_token_raises_token_expired_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _load_required_env(monkeypatch)
     settings = get_settings()
     expired_token = jwt.encode(

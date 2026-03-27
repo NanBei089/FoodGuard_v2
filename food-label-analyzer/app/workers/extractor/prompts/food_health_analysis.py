@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.schemas.analysis_data import FoodHealthAnalysisOutput, HealthAdviceItem, IngredientItem
+from app.schemas.analysis_data import (
+    FoodHealthAnalysisOutput,
+    HealthAdviceItem,
+    IngredientItem,
+)
 
 
 def build_food_health_analysis_prompt() -> str:
@@ -11,7 +15,12 @@ def build_food_health_analysis_prompt() -> str:
 {{
   "score": 整数,
   "summary": "60-100字的总结",
-  "top_risks": ["风险1", "风险2", ...],
+  "hazards": [
+    {{"level": "high|medium|low", "desc": "5-100字的风险描述，如：钠含量达到每日建议摄入量的 100%"}}
+  ],
+  "benefits": [
+    "5-100字的优点描述，如：含有丰富的膳食纤维"
+  ],
   "ingredients": [
     {{
       "name": "配料名称",
@@ -48,7 +57,12 @@ def build_food_health_analysis_repair_prompt() -> str:
 {{
   "score": 整数,
   "summary": "60-100字的总结",
-  "top_risks": ["风险1", "风险2", ...],
+  "hazards": [
+    {{"level": "high|medium|low", "desc": "5-100字的风险描述"}}
+  ],
+  "benefits": [
+    "5-100字的优点描述"
+  ],
   "ingredients": [
     {{
       "name": "配料名称",

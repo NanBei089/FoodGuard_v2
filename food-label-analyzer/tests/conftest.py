@@ -4,7 +4,6 @@ import pytest
 
 from app.core.config import Settings, get_settings
 
-
 REQUIRED_ENV_VARS = {
     "APP_SECRET_KEY": "x" * 32,
     "DATABASE_URL": "postgresql+asyncpg://postgres:password@localhost:5432/food_analyzer",
@@ -39,7 +38,9 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(field_name, raising=False)
 
 
-def load_required_env(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> dict[str, str]:
+def load_required_env(
+    monkeypatch: pytest.MonkeyPatch, **overrides: str
+) -> dict[str, str]:
     clear_settings_env(monkeypatch)
     values = {**REQUIRED_ENV_VARS, **overrides}
     for key, value in values.items():

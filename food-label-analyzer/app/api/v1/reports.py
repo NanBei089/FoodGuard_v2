@@ -10,8 +10,11 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse, success_response
 from app.schemas.report import ReportDetailResponseSchema, ReportListResponseSchema
-from app.services.report_service import get_report_detail, get_report_list
-
+from app.services.report_service import (
+    delete_report,
+    get_report_detail,
+    get_report_list,
+)
 
 router = APIRouter()
 
@@ -28,7 +31,9 @@ router = APIRouter()
 )
 async def list_reports(
     page: int = Query(default=1, ge=1, description="页码，从 1 开始", examples=[1]),
-    page_size: int = Query(default=10, ge=1, le=50, description="每页条数，最大 50", examples=[10]),
+    page_size: int = Query(
+        default=10, ge=1, le=50, description="每页条数，最大 50", examples=[10]
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ReportListResponseSchema]:
@@ -54,6 +59,26 @@ async def report_detail(
 ) -> ApiResponse[ReportDetailResponseSchema]:
     payload = await get_report_detail(report_id, current_user.id, db)
     return success_response(payload)
+
+
+@router.delete(
+    "/{report_id}",
+    response_model=ApiResponse[None],
+    summary="删除报告",
+    description="软删除当前用户自己的报告记录。",
+    responses={
+        200: {"description": "删除成功"},
+        401: {"description": "未认证"},
+        404: {"description": "报告不存在"},
+    },
+)
+async def remove_report(
+    report_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[None]:
+    await delete_report(report_id, current_user.id, db)
+    return success_response(None)
 
 
 __all__ = ["router"]

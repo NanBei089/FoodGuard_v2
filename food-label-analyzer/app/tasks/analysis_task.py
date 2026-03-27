@@ -21,12 +21,15 @@ from app.core.errors import (
 from app.db.session import get_sync_db
 from app.models.analysis_task import AnalysisTask, TaskStatus
 from app.models.report import Report
-from app.schemas.analysis_data import FoodHealthAnalysisOutput, NutritionData, RAGResults
+from app.schemas.analysis_data import (
+    FoodHealthAnalysisOutput,
+    NutritionData,
+    RAGResults,
+)
 from app.tasks.celery_app import celery_app
 from app.workers import llm_worker, ocr_worker, rag_worker, yolo_worker
 from app.workers.extractor import ingredient_extractor, nutrition_extractor
-from app.workers.ocr_worker import OCRTextResult, TableRecognitionResult
-
+from app.workers.ocr_worker import OCRParallelResult, OCRTextResult, TableRecognitionResult
 
 logger = structlog.get_logger(__name__)
 
@@ -39,7 +42,9 @@ def _to_plain_data(value: Any) -> Any:
     if isinstance(value, (dict, list, str, int, float, bool)):
         return value
     if hasattr(value, "__dict__"):
-        return {key: item for key, item in vars(value).items() if not key.startswith("_")}
+        return {
+            key: item for key, item in vars(value).items() if not key.startswith("_")
+        }
     return value
 
 
@@ -52,7 +57,9 @@ def _extract_score(llm_output_json: dict[str, Any]) -> int:
     return max(0, min(100, score))
 
 
-def _validate_optional_json(model_cls, payload: dict[str, Any] | None, field_name: str) -> dict[str, Any] | None:
+def _validate_optional_json(
+    model_cls, payload: dict[str, Any] | None, field_name: str
+) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return payload
     try:
@@ -83,7 +90,7 @@ def _build_artifact_urls(
 def _download_image(image_key: str) -> bytes:
     settings = get_settings()
     client = Minio(
-        endpoint=settings.MINIO_ENDPOINT,
+        endpoint=settings.minio_client_endpoint,
         access_key=settings.MINIO_ACCESS_KEY,
         secret_key=settings.MINIO_SECRET_KEY.get_secret_value(),
         secure=settings.MINIO_USE_SSL,
@@ -100,7 +107,9 @@ def _download_image(image_key: str) -> bytes:
             response.release_conn()
 
 
-def _update_task_status(task_id: str, status: TaskStatus, error_message: str | None = None) -> None:
+def _update_task_status(
+    task_id: str, status: TaskStatus, error_message: str | None = None
+) -> None:
     task_uuid = uuid.UUID(task_id)
     with get_sync_db() as db:
         task = db.get(AnalysisTask, task_uuid)
@@ -126,14 +135,24 @@ def _complete_task_with_report(
 ) -> None:
     task_uuid = uuid.UUID(task_id)
     user_uuid = uuid.UUID(user_id)
-    validated_llm_output = FoodHealthAnalysisOutput.model_validate(llm_output_json).model_dump()
-    validated_nutrition = _validate_optional_json(NutritionData, nutrition_json, "nutrition_json")
-    validated_rag_results = _validate_optional_json(RAGResults, rag_results_json, "rag_results_json")
+    validated_llm_output = FoodHealthAnalysisOutput.model_validate(
+        llm_output_json
+    ).model_dump()
+    validated_nutrition = _validate_optional_json(
+        NutritionData, nutrition_json, "nutrition_json"
+    )
+    validated_rag_results = _validate_optional_json(
+        RAGResults, rag_results_json, "rag_results_json"
+    )
     parse_source = None
-    nutrition_source_payload = validated_nutrition if isinstance(validated_nutrition, dict) else nutrition_json
+    nutrition_source_payload = (
+        validated_nutrition if isinstance(validated_nutrition, dict) else nutrition_json
+    )
     if isinstance(nutrition_source_payload, dict):
         raw_parse_source = nutrition_source_payload.get("parse_method")
-        parse_source = str(raw_parse_source) if isinstance(raw_parse_source, str) else None
+        parse_source = (
+            str(raw_parse_source) if isinstance(raw_parse_source, str) else None
+        )
 
     with get_sync_db() as db:
         task = db.get(AnalysisTask, task_uuid)
@@ -143,7 +162,12 @@ def _complete_task_with_report(
         result = db.execute(select(Report).where(Report.task_id == task_uuid))
         report = result.scalar_one_or_none()
         if report is None:
-            report = Report(task_id=task_uuid, user_id=user_uuid, score=score, llm_output_json=validated_llm_output)
+            report = Report(
+                task_id=task_uuid,
+                user_id=user_uuid,
+                score=score,
+                llm_output_json=validated_llm_output,
+            )
             db.add(report)
 
         report.ingredients_text = ingredients_text
@@ -177,6 +201,83 @@ def _run_ocr_table(image_bytes: bytes) -> TableRecognitionResult:
         raise OCRServiceError("Nutrition table recognition failed") from exc
 
 
+def _run_ocr_parallel(
+    full_text_image_bytes: bytes,
+    nutrition_image_bytes: bytes,
+) -> OCRParallelResult:
+    try:
+        return ocr_worker.recognize_parallel(
+            full_text_image_bytes,
+            nutrition_image_bytes=nutrition_image_bytes,
+        )
+    except NotImplementedError:
+        raise
+    except Exception as exc:
+        raise OCRServiceError("Parallel OCR failed") from exc
+
+
+def _extract_table_rows(table_result: TableRecognitionResult | None) -> list[list[str]]:
+    if table_result is None or not isinstance(table_result.table_json, dict):
+        return []
+
+    raw_rows = table_result.table_json.get("rows")
+    if not isinstance(raw_rows, list):
+        return []
+
+    rows: list[list[str]] = []
+    for raw_row in raw_rows:
+        if not isinstance(raw_row, list):
+            continue
+        row = [str(cell).strip() for cell in raw_row if str(cell).strip()]
+        if row:
+            rows.append(row)
+    return rows
+
+
+def _table_result_quality(table_result: TableRecognitionResult | None) -> tuple[int, int, int, int]:
+    rows = _extract_table_rows(table_result)
+    numeric_value_cells = sum(
+        1
+        for row in rows
+        for cell in row[1:]
+        if any(char.isdigit() for char in cell)
+    )
+    multi_column_rows = sum(1 for row in rows if len(row) >= 2)
+    fallback_text_len = (
+        len((table_result.ocr_fallback_text or "").strip()) if table_result else 0
+    )
+    return (
+        numeric_value_cells,
+        multi_column_rows,
+        len(rows),
+        fallback_text_len,
+    )
+
+
+def _table_result_is_incomplete(table_result: TableRecognitionResult | None) -> bool:
+    numeric_value_cells, multi_column_rows, row_count, _ = _table_result_quality(
+        table_result
+    )
+    if row_count == 0:
+        return True
+    if multi_column_rows == 0:
+        return True
+    if numeric_value_cells == 0:
+        return True
+    return False
+
+
+def _choose_better_table_result(
+    primary: TableRecognitionResult | None,
+    candidate: TableRecognitionResult | None,
+) -> TableRecognitionResult | None:
+    primary_quality = _table_result_quality(primary)
+    candidate_quality = _table_result_quality(candidate)
+    if candidate_quality > primary_quality:
+        return candidate
+    return primary
+
+
 def _run_rag(ingredient_terms: list[str], ingredients_text: str) -> dict[str, Any]:
     try:
         return rag_worker.retrieve_all(ingredient_terms, ingredients_text)
@@ -186,7 +287,9 @@ def _run_rag(ingredient_terms: list[str], ingredients_text: str) -> dict[str, An
         raise EmbeddingServiceError("RAG retrieval failed") from exc
 
 
-def _run_llm(full_text: str, nutrition_json: dict[str, Any], rag_results_json: dict[str, Any]) -> dict[str, Any]:
+def _run_llm(
+    full_text: str, nutrition_json: dict[str, Any], rag_results_json: dict[str, Any]
+) -> dict[str, Any]:
     try:
         return llm_worker.analyze(full_text, nutrition_json, rag_results_json)
     except NotImplementedError:
@@ -202,7 +305,9 @@ def _run_llm(full_text: str, nutrition_json: dict[str, Any], rag_results_json: d
     soft_time_limit=270,
     time_limit=300,
 )
-def process_image_task(self, task_id: str, image_key: str, user_id: str) -> dict[str, Any]:
+def process_image_task(
+    self, task_id: str, image_key: str, user_id: str
+) -> dict[str, Any]:
     started_at = perf_counter()
     logger.info(
         "analysis_task_started",
@@ -221,19 +326,64 @@ def process_image_task(self, task_id: str, image_key: str, user_id: str) -> dict
 
         step_started = perf_counter()
         bbox = yolo_worker.detect(image_bytes)
-        cropped_image = yolo_worker.crop_image(image_bytes, bbox) if bbox else image_bytes
+        cropped_image = (
+            yolo_worker.crop_image(image_bytes, bbox) if bbox else image_bytes
+        )
+        masked_full_image = (
+            yolo_worker.mask_image(image_bytes, bbox) if bbox else image_bytes
+        )
         timings["yolo_ms"] = int((perf_counter() - step_started) * 1000)
 
         step_started = perf_counter()
-        full_text_result = _run_ocr_full_text(image_bytes)
+        if bbox:
+            parallel_result = _run_ocr_parallel(masked_full_image, cropped_image)
+            full_text_result = parallel_result.full_text
+            table_result = parallel_result.nutrition_table
+            if _table_result_is_incomplete(table_result):
+                try:
+                    full_image_table_result = _run_ocr_table(image_bytes)
+                except OCRServiceError as exc:
+                    logger.warning(
+                        "nutrition_table_full_image_fallback_failed",
+                        task_id=task_id,
+                        error_message=str(exc),
+                    )
+                else:
+                    selected_table_result = _choose_better_table_result(
+                        table_result, full_image_table_result
+                    )
+                    if selected_table_result is not table_result:
+                        logger.info(
+                            "nutrition_table_full_image_fallback_selected",
+                            task_id=task_id,
+                            cropped_quality=_table_result_quality(table_result),
+                            full_image_quality=_table_result_quality(
+                                full_image_table_result
+                            ),
+                        )
+                        table_result = selected_table_result
+        else:
+            full_text_result = _run_ocr_full_text(image_bytes)
+            try:
+                table_result = _run_ocr_table(image_bytes)
+            except OCRServiceError as exc:
+                logger.warning(
+                    "nutrition_table_full_image_scan_failed",
+                    task_id=task_id,
+                    error_message=str(exc),
+                )
+                table_result = None
         full_text = full_text_result.raw_text
-        table_result = _run_ocr_table(cropped_image) if bbox else None
         timings["ocr_ms"] = int((perf_counter() - step_started) * 1000)
 
         step_started = perf_counter()
         nutrition_output = nutrition_extractor.parse(
             table_result.model_dump() if table_result else None,
-            table_result.ocr_fallback_text if table_result and table_result.ocr_fallback_text else full_text or None,
+            (
+                table_result.ocr_fallback_text
+                if table_result and table_result.ocr_fallback_text
+                else full_text or None
+            ),
         )
         nutrition_json = _to_plain_data(nutrition_output) or {}
         if not isinstance(nutrition_json, dict):
@@ -270,7 +420,12 @@ def process_image_task(self, task_id: str, image_key: str, user_id: str) -> dict
             artifact_urls=_build_artifact_urls(full_text_result, table_result),
         )
         total_elapsed_ms = int((perf_counter() - started_at) * 1000)
-        logger.info("analysis_task_completed", task_id=task_id, total_elapsed_ms=total_elapsed_ms, timings=timings)
+        logger.info(
+            "analysis_task_completed",
+            task_id=task_id,
+            total_elapsed_ms=total_elapsed_ms,
+            timings=timings,
+        )
         return {
             "task_id": task_id,
             "status": TaskStatus.COMPLETED.value,
@@ -281,7 +436,12 @@ def process_image_task(self, task_id: str, image_key: str, user_id: str) -> dict
         _update_task_status(task_id, TaskStatus.FAILED, error_message)
         logger.warning("analysis_task_timeout", task_id=task_id, timings=timings)
         return {"task_id": task_id, "status": TaskStatus.FAILED.value}
-    except (OCRServiceError, LLMServiceError, StorageServiceError, EmbeddingServiceError) as exc:
+    except (
+        OCRServiceError,
+        LLMServiceError,
+        StorageServiceError,
+        EmbeddingServiceError,
+    ) as exc:
         if self.request.retries < self.max_retries:
             logger.warning(
                 "analysis_task_retrying",
@@ -301,7 +461,9 @@ def process_image_task(self, task_id: str, image_key: str, user_id: str) -> dict
         return {"task_id": task_id, "status": TaskStatus.FAILED.value}
     except NotImplementedError as exc:
         _update_task_status(task_id, TaskStatus.FAILED, str(exc))
-        logger.warning("analysis_task_not_implemented", task_id=task_id, error_message=str(exc))
+        logger.warning(
+            "analysis_task_not_implemented", task_id=task_id, error_message=str(exc)
+        )
         return {"task_id": task_id, "status": TaskStatus.FAILED.value}
     except Exception as exc:
         _update_task_status(task_id, TaskStatus.FAILED, str(exc))

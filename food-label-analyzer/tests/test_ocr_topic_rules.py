@@ -23,13 +23,15 @@ class TestOCRTopicRules:
                     return ocr_json_path
         return None
 
-    def test_ocr_topic_rules_with_demo_data(self, first_ocr_result: Path | None) -> None:
+    def test_ocr_topic_rules_with_demo_data(
+        self, first_ocr_result: Path | None
+    ) -> None:
+        from app.workers.extractor.ingredients_only import build_ingredients_output
         from app.workers.extractor.topic_cleaner import clean_ocr_text
         from app.workers.extractor.topic_splitter import (
             extract_ingredient_topic,
             extract_other_topics,
         )
-        from app.workers.extractor.ingredients_only import build_ingredients_output
 
         if first_ocr_result is None:
             pytest.skip("No demo OCR results found for testing")
@@ -83,8 +85,8 @@ class TestOCRTopicRules:
             extract_ingredient_topic("", "")
 
     def test_extract_other_topics_returns_all_topics(self) -> None:
-        from app.workers.extractor.topic_splitter import extract_other_topics
         from app.workers.extractor.rule_config import OTHER_TOPIC_ORDER
+        from app.workers.extractor.topic_splitter import extract_other_topics
 
         result = extract_other_topics(
             clean_text="一些测试文本配料表：面粉、水、盐。保质期：12个月。",
@@ -99,10 +101,10 @@ class TestOCRTopicRules:
 class TestRuleConfig:
     def test_rule_config_imports(self) -> None:
         from app.workers.extractor.rule_config import (
-            INGREDIENT_LABEL_RE,
             INGREDIENT_END_RE,
-            OTHER_TOPIC_PATTERNS,
+            INGREDIENT_LABEL_RE,
             MANUFACTURER_LINE_RE,
+            OTHER_TOPIC_PATTERNS,
         )
 
         assert INGREDIENT_LABEL_RE is not None

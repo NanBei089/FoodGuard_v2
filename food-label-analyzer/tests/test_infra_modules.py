@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -13,7 +14,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.config import Settings, get_settings
 from app.core.errors import TokenInvalidError
-
 
 REQUIRED_ENV_VARS = {
     "APP_SECRET_KEY": "x" * 32,
@@ -59,7 +59,9 @@ def test_db_base_mixins_define_expected_columns() -> None:
     assert columns["name"].type.length == 50
 
 
-def test_session_module_creates_engine_and_db_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_session_module_creates_engine_and_db_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _load_required_env(monkeypatch)
     session_module = importlib.import_module("app.db.session")
     session_module = importlib.reload(session_module)
@@ -126,7 +128,9 @@ def test_common_schema_helpers() -> None:
 
     response = common_module.success_response({"ok": True}, message="done")
     page_request = common_module.PageRequest(page=2, page_size=10)
-    page_response = common_module.PageResponse[str](items=["a", "b"], total=21, page=2, page_size=10)
+    page_response = common_module.PageResponse[str](
+        items=["a", "b"], total=21, page=2, page_size=10
+    )
 
     assert response.code == 0
     assert response.message == "done"
@@ -136,7 +140,10 @@ def test_common_schema_helpers() -> None:
     assert page_response.total_pages == 3
 
 
-def test_api_router_registers_expected_v1_prefixes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_router_registers_expected_v1_prefixes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _load_required_env(monkeypatch)
     captured_prefixes: list[str] = []
     original_include_router = APIRouter.include_router
 
@@ -149,7 +156,24 @@ def test_api_router_registers_expected_v1_prefixes(monkeypatch: pytest.MonkeyPat
     router_module = importlib.import_module("app.api.router")
     importlib.reload(router_module)
 
-    assert captured_prefixes[:3] == ["/auth", "/analysis", "/reports"]
+    assert captured_prefixes[:5] == [
+        "/auth",
+        "/analysis",
+        "/reports",
+        "/users",
+        "/preferences",
+    ]
+
+
+def test_celery_app_registers_analysis_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    _load_required_env(monkeypatch)
+    celery_module = importlib.import_module("app.tasks.celery_app")
+    celery_module = importlib.reload(celery_module)
+
+    assert "analysis.process_image" in celery_module.celery_app.tasks
+    if os.name == "nt":
+        assert celery_module.celery_app.conf.worker_pool == "solo"
+        assert celery_module.celery_app.conf.worker_concurrency == 1
 
 
 def test_dependencies_get_current_user(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -171,7 +195,9 @@ def test_dependencies_get_current_user(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
 
-    user = asyncio.run(dependencies_module.get_current_user(token="token", db=fake_session))
+    user = asyncio.run(
+        dependencies_module.get_current_user(token="token", db=fake_session)
+    )
     assert user is fake_user
 
 
@@ -193,15 +219,22 @@ def test_dependencies_get_current_user_rejects_non_access_token(
     )
 
     with pytest.raises(TokenInvalidError):
-        asyncio.run(dependencies_module.get_current_user(token="token", db=fake_session))
+        asyncio.run(
+            dependencies_module.get_current_user(token="token", db=fake_session)
+        )
 
 
-def test_dependencies_oauth2_scheme_uses_settings_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dependencies_oauth2_scheme_uses_settings_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _load_required_env(monkeypatch, API_V1_PREFIX="/api/custom")
     dependencies_module = importlib.import_module("app.dependencies")
     dependencies_module = importlib.reload(dependencies_module)
 
-    assert dependencies_module.oauth2_scheme.model.flows.password.tokenUrl == "/api/custom/auth/login"
+    assert (
+        dependencies_module.oauth2_scheme.model.flows.password.tokenUrl
+        == "/api/custom/auth/login"
+    )
 
 
 def test_main_health_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -242,7 +275,9 @@ def test_main_health_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     assert main_module.app.redoc_url == "/redoc"
 
 
-def test_main_health_endpoint_supports_request_id_and_hsts(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_health_endpoint_supports_request_id_and_hsts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _load_required_env(monkeypatch, SKIP_STARTUP_CHECKS="true")
     main_module = importlib.import_module("app.main")
     main_module = importlib.reload(main_module)
@@ -258,10 +293,15 @@ def test_main_health_endpoint_supports_request_id_and_hsts(monkeypatch: pytest.M
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "degraded"
     assert response.headers["X-Request-ID"] == "req-123"
-    assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
+    assert (
+        response.headers["Strict-Transport-Security"]
+        == "max-age=31536000; includeSubDomains"
+    )
 
 
-def test_probe_ocr_runtime_uses_post_and_rejects_invalid_route(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_ocr_runtime_uses_post_and_rejects_invalid_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _load_required_env(monkeypatch, SKIP_STARTUP_CHECKS="true")
     main_module = importlib.import_module("app.main")
     main_module = importlib.reload(main_module)
@@ -283,7 +323,9 @@ def test_probe_ocr_runtime_uses_post_and_rejects_invalid_route(monkeypatch: pyte
             calls.append((url, headers, data))
             return FakeResponse(405)
 
-    monkeypatch.setattr(main_module.httpx, "AsyncClient", lambda *args, **kwargs: FakeAsyncClient())
+    monkeypatch.setattr(
+        main_module.httpx, "AsyncClient", lambda *args, **kwargs: FakeAsyncClient()
+    )
 
     with pytest.raises(RuntimeError):
         asyncio.run(main_module._probe_ocr_runtime())

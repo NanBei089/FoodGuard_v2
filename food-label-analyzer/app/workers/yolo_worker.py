@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import io
 import math
 import threading
@@ -7,11 +8,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import structlog
-from ultralytics import YOLO
 from PIL import Image
+from ultralytics import YOLO
 
 from app.core.config import get_settings
-
 
 logger = structlog.get_logger(__name__)
 
@@ -91,8 +91,14 @@ def detect_nutrition_bbox(
         return response
 
     xyxy_list = boxes.xyxy.cpu().tolist()
-    conf_list = boxes.conf.cpu().tolist() if boxes.conf is not None else [0.0] * len(xyxy_list)
-    cls_list = boxes.cls.cpu().tolist() if boxes.cls is not None else [TABLE_NUM] * len(xyxy_list)
+    conf_list = (
+        boxes.conf.cpu().tolist() if boxes.conf is not None else [0.0] * len(xyxy_list)
+    )
+    cls_list = (
+        boxes.cls.cpu().tolist()
+        if boxes.cls is not None
+        else [TABLE_NUM] * len(xyxy_list)
+    )
 
     candidates: list[dict[str, Any]] = []
     for xyxy, score, cls_id in zip(xyxy_list, conf_list, cls_list):
@@ -159,8 +165,14 @@ def detect_nutrition_bbox_from_results(
         return response
 
     xyxy_list = boxes.xyxy.cpu().tolist()
-    conf_list = boxes.conf.cpu().tolist() if boxes.conf is not None else [0.0] * len(xyxy_list)
-    cls_list = boxes.cls.cpu().tolist() if boxes.cls is not None else [TABLE_NUM] * len(xyxy_list)
+    conf_list = (
+        boxes.conf.cpu().tolist() if boxes.conf is not None else [0.0] * len(xyxy_list)
+    )
+    cls_list = (
+        boxes.cls.cpu().tolist()
+        if boxes.cls is not None
+        else [TABLE_NUM] * len(xyxy_list)
+    )
 
     candidates: list[dict[str, Any]] = []
     for xyxy, score, cls_id in zip(xyxy_list, conf_list, cls_list):
@@ -203,19 +215,35 @@ def _get_model() -> YOLO:
         with _model_lock:
             if _MODEL_INSTANCE is None:
                 settings = get_settings()
-                _MODEL_INSTANCE = YOLO(settings.YOLO_MODEL_PATH)
+                model_path = settings.YOLO_MODEL_PATH
+                if (
+                    Path(model_path).suffix.lower() == ".onnx"
+                    and importlib.util.find_spec("onnx") is None
+                ):
+                    raise RuntimeError(
+                        "onnx package is required for YOLO ONNX models but is not installed"
+                    )
+                _MODEL_INSTANCE = YOLO(model_path, task="detect")
     return _MODEL_INSTANCE
 
 
 def warmup() -> None:
     settings = get_settings()
     model = _get_model()
-    dummy_image = Image.new("RGB", (settings.YOLO_INPUT_SIZE, settings.YOLO_INPUT_SIZE), color=(128, 128, 128))
-    results = model.predict(source=dummy_image, imgsz=settings.YOLO_INPUT_SIZE, verbose=False)
+    dummy_image = Image.new(
+        "RGB",
+        (settings.YOLO_INPUT_SIZE, settings.YOLO_INPUT_SIZE),
+        color=(128, 128, 128),
+    )
+    results = model.predict(
+        source=dummy_image, imgsz=settings.YOLO_INPUT_SIZE, verbose=False
+    )
     detect_nutrition_bbox_from_results(results, select_top_k=1)
 
 
-def detect(image_bytes: bytes, conf: float | None = None) -> dict[str, int | float] | None:
+def detect(
+    image_bytes: bytes, conf: float | None = None
+) -> dict[str, int | float] | None:
     settings = get_settings()
     if conf is None:
         conf = settings.YOLO_CONFIDENCE_THRESHOLD
@@ -230,10 +258,12 @@ def detect(image_bytes: bytes, conf: float | None = None) -> dict[str, int | flo
                 conf=conf,
                 verbose=False,
             )
-            result = detect_nutrition_bbox_from_results(results, select_top_k=settings.YOLO_SELECT_TOP_K)
+            result = detect_nutrition_bbox_from_results(
+                results, select_top_k=settings.YOLO_SELECT_TOP_K
+            )
         except Exception:
-            import tempfile
             import os
+            import tempfile
 
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                 temp_path = tmp.name
@@ -270,8 +300,9 @@ def crop_image(image_bytes: bytes, bbox: dict, padding: int | None = None) -> by
     if padding is None:
         settings = get_settings()
         padding = settings.YOLO_CROP_PADDING
-    from PIL import Image
     import io
+
+    from PIL import Image
 
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     width, height = image.size
@@ -291,8 +322,9 @@ def mask_image(image_bytes: bytes, bbox: dict, padding: int | None = None) -> by
     if padding is None:
         settings = get_settings()
         padding = settings.YOLO_CROP_PADDING
-    from PIL import Image, ImageDraw
     import io
+
+    from PIL import Image, ImageDraw
 
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     width, height = image.size
@@ -310,4 +342,11 @@ def mask_image(image_bytes: bytes, bbox: dict, padding: int | None = None) -> by
     return buffer.getvalue()
 
 
-__all__ = ["detect", "detect_nutrition_bbox", "crop_image", "mask_image", "warmup", "_get_model"]
+__all__ = [
+    "detect",
+    "detect_nutrition_bbox",
+    "crop_image",
+    "mask_image",
+    "warmup",
+    "_get_model",
+]
