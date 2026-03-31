@@ -30,6 +30,7 @@ from app.schemas.report import (
     ReportListResponseSchema,
 )
 from app.services.storage_service import get_storage_service
+from app.workers.extractor.ingredient_extractor import normalize_ingredients_text
 
 NUTRIENT_DEFINITIONS: dict[str, dict[str, Any]] = {
     "energy": {
@@ -196,6 +197,14 @@ def _sanitize_artifact_urls(value: Any) -> dict[str, str] | None:
         if str(key).strip() and isinstance(item, str) and item.strip()
     }
     return cleaned or None
+
+
+def _sanitize_ingredients_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    cleaned = normalize_ingredients_text(value)
+    return cleaned or value
 
 
 def _normalize_nutrient_name(value: str) -> str:
@@ -595,7 +604,7 @@ async def get_report_detail(
         report_id=report.id,
         task_id=report.task_id,
         image_url=await _build_image_url(image_key, image_url),
-        ingredients_text=report.ingredients_text,
+        ingredients_text=_sanitize_ingredients_text(report.ingredients_text),
         nutrition=_format_nutrition(validated_nutrition),
         nutrition_table=_build_nutrition_table(validated_nutrition),
         nutrition_parse_source=report.nutrition_parse_source,

@@ -213,6 +213,56 @@ def test_report_service_builds_list_and_detail(monkeypatch: pytest.MonkeyPatch) 
     assert detail.artifact_urls == {"ocr_full_json_url": "https://example.com/ocr.json"}
 
 
+def test_report_service_sanitizes_legacy_html_polluted_ingredients_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    load_required_env(monkeypatch)
+    report_service_module = importlib.reload(
+        importlib.import_module("app.services.report_service")
+    )
+
+    user_id = uuid.uuid4()
+    task_id = uuid.uuid4()
+    report_id = uuid.uuid4()
+    created_at = datetime.now(timezone.utc)
+    report = Report(
+        task_id=task_id,
+        user_id=user_id,
+        ingredients_text=(
+            "\u53ea\u6709\u897f\u6885 \u9ad8\u81b3\u98df\u7ea4\u7ef4</div>"
+            "<table><tr><td>\u9879\u76ee</td><td>\u6bcf100\u514b</td></tr>"
+            "<tr><td>\u78b3\u6c34\u5316\u5408\u7269</td><td>59.8\u514b</td></tr></table>"
+            "\u4ea7\u54c1\u540d\u79f0\uff1a\u65e0\u6838\u5927\u897f\u6885\n"
+            "\u4ea7\u54c1\u7c7b\u578b\uff1a\u6c34\u679c\u5e72\u5236\u54c1\n"
+            "\u914d\u6599\u8868\uff1a\u897f\u6885100%"
+        ),
+        nutrition_json=None,
+        nutrition_parse_source="table_recognition",
+        rag_results_json=None,
+        llm_output_json={
+            "summary": "S" * 60,
+            "top_risks": [],
+            "ingredients": [],
+            "health_advice": _health_advice_payload(),
+            "score": 85,
+        },
+        score=85,
+    )
+    report.id = report_id
+    report.created_at = created_at
+
+    fake_db = AsyncMock()
+    fake_db.execute = AsyncMock(
+        return_value=_OneOrNoneResult((report, None, "https://example.com/original.png"))
+    )
+
+    detail = asyncio.run(
+        report_service_module.get_report_detail(report.id, user_id, fake_db)
+    )
+
+    assert detail.ingredients_text == "\u897f\u6885100%"
+
+
 def test_report_service_returns_empty_page_when_total_is_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

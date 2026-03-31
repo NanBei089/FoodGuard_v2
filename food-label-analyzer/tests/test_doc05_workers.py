@@ -674,6 +674,27 @@ def test_ingredient_extract_llm_fallback(monkeypatch: pytest.MonkeyPatch) -> Non
     assert raw_text == "(LLM提取)"
 
 
+def test_ingredient_extract_strips_embedded_html_table_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    load_required_env(monkeypatch)
+    ingredient_module = importlib.reload(
+        importlib.import_module("app.workers.extractor.ingredient_extractor")
+    )
+
+    ingredients, raw_text = ingredient_module.extract(
+        "\u53ea\u6709\u897f\u6885 \u9ad8\u81b3\u98df\u7ea4\u7ef4</div>"
+        "<table><tr><td>\u9879\u76ee</td><td>\u6bcf100\u514b</td></tr>"
+        "<tr><td>\u78b3\u6c34\u5316\u5408\u7269</td><td>59.8\u514b</td></tr></table>"
+        "\u4ea7\u54c1\u540d\u79f0\uff1a\u65e0\u6838\u5927\u897f\u6885\n"
+        "\u4ea7\u54c1\u7c7b\u578b\uff1a\u6c34\u679c\u5e72\u5236\u54c1\n"
+        "\u914d\u6599\u8868\uff1a\u897f\u6885100%"
+    )
+
+    assert raw_text == "\u897f\u6885100%"
+    assert ingredients == ["\u897f\u6885100%"]
+
+
 def test_rag_embed_uses_ollama_api(monkeypatch: pytest.MonkeyPatch) -> None:
     load_required_env(monkeypatch)
     rag_module = importlib.reload(importlib.import_module("app.workers.rag_worker"))
