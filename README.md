@@ -169,13 +169,5 @@ npm run lint
 - [后端 API 文档](food-label-analyzer/API_DOCUMENTATION.md)
 - [分析链路说明](food-label-analyzer/ANALYSIS_PIPELINE.md)
 
-## 开发建议
 
-- 后端改动默认在 `food-label-analyzer/` 完成
-- 涉及配料提取、OCR、营养表识别或健康建议时，先看 `提示词/` 中的领域文档
-- 不要把真实密钥提交到仓库；以 `food-label-analyzer/.env.example` 为配置契约
-- 不要随意覆盖 `models_store/`、`chroma_data/` 或 `.env`
 
-## License
-
-当前仓库未单独声明许可证。如需开源发布，请补充明确的 LICENSE 文件。
