@@ -5,10 +5,13 @@ import structlog
 from app.core.config import get_settings
 from app.core.email import get_email_service
 
+"""邮件发送业务入口，供认证服务异步调度。"""
+
 logger = structlog.get_logger(__name__)
 
 
 async def send_verification_email(email: str, code: str) -> None:
+    """发送注册验证码邮件。"""
     try:
         await get_email_service().send_verification_code(email, code)
     except Exception as exc:
@@ -21,6 +24,7 @@ async def send_verification_email(email: str, code: str) -> None:
 
 
 async def send_reset_email(email: str, token: str) -> None:
+    """发送密码重置邮件。"""
     reset_link = f"{get_settings().FRONTEND_URL}/reset-password?token={token}"
     try:
         await get_email_service().send_password_reset(email, reset_link)

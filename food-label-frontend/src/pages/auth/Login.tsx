@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/auth';
 import type { ApiResponse } from '@/types/api';
 import type { TokenResponse } from '@/types/auth';
 
+/** 登录页，负责用户认证和登录后的会话初始化。 */
 export default function Login() {
   const navigate = useNavigate();
   const setSession = useAuthStore((state) => state.setSession);
@@ -23,6 +24,7 @@ export default function Login() {
   const [error, setError] = useState('');
 
   const handleLogin = async (event: React.FormEvent) => {
+    /** 提交登录表单，并在成功后同步拉取用户上下文。 */
     event.preventDefault();
     setLoading(true);
     setError('');
@@ -39,6 +41,7 @@ export default function Login() {
       }
 
       persistTokens(res.data);
+      // 登录成功后立刻拉取资料和偏好，避免首页首屏出现身份信息闪动。
       const { user, preferences } = await fetchSessionContext();
       setSession(user, preferences);
       navigate(needsOnboarding(user, preferences) ? '/onboarding' : '/');

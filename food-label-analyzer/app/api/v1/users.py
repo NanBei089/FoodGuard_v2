@@ -19,6 +19,8 @@ from app.services.user_service import (
     update_user_profile,
 )
 
+"""用户资料与账号设置 API。"""
+
 router = APIRouter()
 
 
@@ -31,6 +33,7 @@ async def get_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserProfileResponse]:
+    """获取当前用户资料。"""
     payload = await get_user_profile(current_user)
     return success_response(payload)
 
@@ -45,6 +48,7 @@ async def patch_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserProfileResponse]:
+    """更新当前用户资料。"""
     payload = await update_user_profile(
         current_user,
         display_name=request.display_name,
@@ -64,6 +68,7 @@ async def change_password(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
+    """修改当前用户密码。"""
     await change_user_password(
         current_user,
         current_password=request.current_password,
@@ -82,6 +87,7 @@ async def delete_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
+    """注销当前账号。"""
     await deactivate_user(current_user, db)
     return success_response(None)
 

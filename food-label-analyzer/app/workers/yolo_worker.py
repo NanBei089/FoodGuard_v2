@@ -13,12 +13,15 @@ from ultralytics import YOLO
 
 from app.core.config import get_settings
 
+"""YOLO Worker，负责定位营养成分表区域并生成裁剪/遮罩图。"""
+
 logger = structlog.get_logger(__name__)
 
 TABLE_NUM = 0
 
 
 def _ensure_file(path: str | Path, label: str) -> Path:
+    """确保模型文件或图片文件真实存在。"""
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"{label}不存在: {file_path}")
@@ -28,6 +31,7 @@ def _ensure_file(path: str | Path, label: str) -> Path:
 
 
 def _clamp_bbox(raw_xyxy: Sequence[float], img_w: int, img_h: int) -> list[int]:
+    """把浮点边界框裁剪到图像合法范围内。"""
     if len(raw_xyxy) != 4:
         raise ValueError(f"bbox 长度必须为 4，当前为 {len(raw_xyxy)}")
 
@@ -39,6 +43,7 @@ def _clamp_bbox(raw_xyxy: Sequence[float], img_w: int, img_h: int) -> list[int]:
 
 
 def _bbox_area(xyxy: Sequence[int]) -> int:
+    """计算边界框面积。"""
     width = max(0, xyxy[2] - xyxy[0])
     height = max(0, xyxy[3] - xyxy[1])
     return width * height
@@ -52,6 +57,7 @@ def detect_nutrition_bbox(
     imgsz: int = 640,
     select_top_k: int = 5,
 ) -> dict[str, Any]:
+    """对指定图片执行检测，并返回候选营养表框。"""
     model_file = _ensure_file(model_path, "模型文件")
     image_file = _ensure_file(image_path, "图片文件")
 
@@ -127,6 +133,7 @@ def detect_nutrition_bbox(
     if len(candidates) == 1:
         selected = candidates[0]
     else:
+        # 只看 top_k 后再按面积优先，是为了平衡“置信度高但框过小”和“面积大但噪声框”的冲突。
         selected = max(top_candidates, key=lambda item: (item["area"], item["conf"]))
 
     response["found"] = True
@@ -139,6 +146,7 @@ def detect_nutrition_bbox_from_results(
     results: Any,
     select_top_k: int = 5,
 ) -> dict[str, Any]:
+    """从已存在的 YOLO 推理结果中提取最优营养表框。"""
     response: dict[str, Any] = {
         "found": False,
         "image_path": "",
@@ -210,6 +218,7 @@ _model_lock = threading.Lock()
 
 
 def _get_model() -> YOLO:
+    """按单例模式加载 YOLO 模型。"""
     global _MODEL_INSTANCE
     if _MODEL_INSTANCE is None:
         with _model_lock:
@@ -228,6 +237,7 @@ def _get_model() -> YOLO:
 
 
 def warmup() -> None:
+    """通过一张虚拟图预热模型，降低首次真实请求延迟。"""
     settings = get_settings()
     model = _get_model()
     dummy_image = Image.new(
@@ -244,6 +254,7 @@ def warmup() -> None:
 def detect(
     image_bytes: bytes, conf: float | None = None
 ) -> dict[str, int | float] | None:
+    """对内存中的图片做营养表定位。"""
     settings = get_settings()
     if conf is None:
         conf = settings.YOLO_CONFIDENCE_THRESHOLD
@@ -265,6 +276,7 @@ def detect(
             import os
             import tempfile
 
+            # 某些后端环境对内存图片推理兼容性不稳定，因此保留落盘回退路径提高鲁棒性。
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                 temp_path = tmp.name
             try:
@@ -297,6 +309,7 @@ def detect(
 
 
 def crop_image(image_bytes: bytes, bbox: dict, padding: int | None = None) -> bytes:
+    """按检测框裁剪营养表区域。"""
     if padding is None:
         settings = get_settings()
         padding = settings.YOLO_CROP_PADDING
@@ -319,6 +332,7 @@ def crop_image(image_bytes: bytes, bbox: dict, padding: int | None = None) -> by
 
 
 def mask_image(image_bytes: bytes, bbox: dict, padding: int | None = None) -> bytes:
+    """把营养表区域打白，用于全文 OCR 时降低表格噪声。"""
     if padding is None:
         settings = get_settings()
         padding = settings.YOLO_CROP_PADDING

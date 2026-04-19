@@ -11,6 +11,7 @@ import Onboarding from './pages/Onboarding';
 import Profile from './pages/Profile';
 import ReportDetail from './pages/ReportDetail';
 
+/** 应用根路由配置。 */
 function App() {
   return (
     <Router>

@@ -11,6 +11,8 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.workers import llm_worker, ocr_worker, rag_worker, yolo_worker
 
+"""Celery 应用配置与 worker 预热逻辑。"""
+
 settings = get_settings()
 _IS_WINDOWS = os.name == "nt"
 
@@ -37,6 +39,7 @@ importlib.import_module("app.tasks.analysis_task")
 
 
 def _initialize_worker_resources() -> None:
+    """初始化 worker 日志和外部资源。"""
     settings = get_settings()
     setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
     logger = structlog.get_logger(__name__)
@@ -58,6 +61,7 @@ def _initialize_worker_resources() -> None:
         logger.warning("rag_warmup_failed", error=str(exc))
 
     try:
+        # LLM 只做配置校验，不在启动阶段发起真实分析请求，避免 worker 启动被外部模型阻塞。
         llm_worker.validate_configuration()
     except Exception as exc:
         logger.warning("llm_configuration_invalid", error=str(exc))
@@ -67,6 +71,7 @@ def _initialize_worker_resources() -> None:
 
 @worker_init.connect
 def on_worker_init(**kwargs) -> None:
+    """Celery worker 启动信号回调。"""
     _initialize_worker_resources()
 
 

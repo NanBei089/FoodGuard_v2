@@ -1,10 +1,12 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
 
+/** 未登录区域布局，负责把已登录用户重定向回应用页。 */
 export function AuthLayout() {
   const { isAuthenticated, needsOnboarding } = useAuthStore();
 
   if (isAuthenticated) {
+    // 已登录用户访问登录/注册页时直接回到当前应进入的业务页面。
     return <Navigate to={needsOnboarding ? '/onboarding' : '/'} replace />;
   }
 

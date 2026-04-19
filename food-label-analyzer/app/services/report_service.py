@@ -32,6 +32,8 @@ from app.schemas.report import (
 from app.services.storage_service import get_storage_service
 from app.workers.extractor.ingredient_extractor import normalize_ingredients_text
 
+"""报告聚合服务，把数据库中的原始 JSON 拼装成前端稳定可消费的数据结构。"""
+
 NUTRIENT_DEFINITIONS: dict[str, dict[str, Any]] = {
     "energy": {
         "cn": "能量",
@@ -155,6 +157,7 @@ _NUTRIENT_ALIAS_MATCHERS = sorted(
 
 
 def _safe_validate(model_cls, value: Any) -> Any:
+    """尝试校验任意 JSON 结构，失败时返回 `None` 而不是中断整份报告。"""
     if value is None:
         return None
     try:
@@ -164,6 +167,7 @@ def _safe_validate(model_cls, value: Any) -> Any:
 
 
 def _coerce_score(value: Any, fallback: int) -> int:
+    """把任意 score 输入夹到 0-100 区间。"""
     try:
         return max(0, min(100, int(value)))
     except (TypeError, ValueError):
@@ -171,12 +175,14 @@ def _coerce_score(value: Any, fallback: int) -> int:
 
 
 def _coerce_string_list(value: Any) -> list[str]:
+    """把任意列表输入清洗为非空字符串数组。"""
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _coerce_model_list(model_cls, value: Any) -> list[Any]:
+    """把松散 JSON 列表尽量转成 schema 列表，坏数据直接跳过。"""
     if not isinstance(value, list):
         return []
     items: list[Any] = []
@@ -189,6 +195,7 @@ def _coerce_model_list(model_cls, value: Any) -> list[Any]:
 
 
 def _sanitize_artifact_urls(value: Any) -> dict[str, str] | None:
+    """清洗分析产物 URL，过滤空键和值。"""
     if not isinstance(value, dict):
         return None
     cleaned = {
@@ -200,6 +207,7 @@ def _sanitize_artifact_urls(value: Any) -> dict[str, str] | None:
 
 
 def _sanitize_ingredients_text(value: str | None) -> str | None:
+    """标准化配料文本，减少 OCR 断句/空格差异对前端展示的影响。"""
     if value is None:
         return None
 
@@ -208,10 +216,12 @@ def _sanitize_ingredients_text(value: str | None) -> str | None:
 
 
 def _normalize_nutrient_name(value: str) -> str:
+    """把营养名规范化为便于别名匹配的形式。"""
     return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", (value or "").lower())
 
 
 def _resolve_nutrient_key(name: str) -> str:
+    """根据别名表把 OCR/LLM 输出映射到统一 nutrient key。"""
     normalized = _normalize_nutrient_name(name)
     for alias, key in _NUTRIENT_ALIAS_MATCHERS:
         if alias and alias in normalized:
@@ -220,6 +230,7 @@ def _resolve_nutrient_key(name: str) -> str:
 
 
 def _parse_percentage(value: str | None) -> float | None:
+    """解析 NRV 百分比。"""
     if not value:
         return None
     cleaned = value.strip().replace("％", "%").replace("%", "")
@@ -230,6 +241,7 @@ def _parse_percentage(value: str | None) -> float | None:
 
 
 def _format_percentage(value: float | None) -> str | None:
+    """把 NRV 数值格式化为前端展示文本。"""
     if value is None:
         return None
     rounded = round(value, 1)
@@ -239,6 +251,7 @@ def _format_percentage(value: float | None) -> str | None:
 
 
 def _parse_float(value: str | None) -> float | None:
+    """尽量把字符串数值解析为 float。"""
     if not value:
         return None
     try:
@@ -248,12 +261,14 @@ def _parse_float(value: str | None) -> float | None:
 
 
 def _format_amount(value: str, unit: str) -> str:
+    """拼接营养值与单位。"""
     amount = str(value).strip()
     normalized_unit = str(unit or "").strip()
     return f"{amount} {normalized_unit}".strip()
 
 
 def _format_serving_basis(serving_size: str | None) -> str:
+    """把份量描述标准化为中英双语展示。"""
     if not serving_size:
         return "每100克 (Per 100g)"
 
@@ -269,6 +284,7 @@ def _format_serving_basis(serving_size: str | None) -> str:
 
 
 def _classify_positive_nutrient(nrv: float | None) -> tuple[str, str]:
+    """正向营养素的展示等级与说明。"""
     if nrv is None:
         return "neutral", "可作为日常补充来源"
     if nrv >= 20:
@@ -283,6 +299,7 @@ def _classify_strict_negative_nutrient(
     nrv: float | None,
     amount_value: float | None,
 ) -> tuple[str, str]:
+    """严格负向营养素的展示等级与说明。"""
     if key == "trans_fat":
         if amount_value is not None and amount_value <= 0:
             return "good", "未检出或极低，相对友好"
@@ -311,6 +328,7 @@ def _classify_strict_negative_nutrient(
 
 
 def _classify_negative_nutrient(key: str, nrv: float | None) -> tuple[str, str]:
+    """一般负向营养素的展示等级与说明。"""
     if nrv is None:
         return "neutral", "建议结合总摄入量综合判断"
 
@@ -332,6 +350,7 @@ def _classify_negative_nutrient(key: str, nrv: float | None) -> tuple[str, str]:
 
 
 def _classify_neutral_nutrient(key: str, nrv: float | None) -> tuple[str, str]:
+    """中性营养素的展示等级与说明。"""
     if nrv is None:
         return "neutral", "建议结合配料与总能量综合判断"
 
@@ -355,6 +374,7 @@ def _build_nutrition_recommendation(
     nrv: float | None,
     amount_value: float | None,
 ) -> tuple[str, str]:
+    """按营养素类型选择对应的 recommendation 规则。"""
     if nutrient_key in POSITIVE_NUTRIENTS:
         return _classify_positive_nutrient(nrv)
     if nutrient_key in {"sodium", "saturated_fat", "trans_fat", "cholesterol"}:
@@ -365,6 +385,7 @@ def _build_nutrition_recommendation(
 
 
 def _build_nutrition_advice_summary(rows: list[NutritionTableRowSchema]) -> str | None:
+    """把表格行摘要为一段可读建议，供详情页直接展示。"""
     top_rows = [row for row in rows if not row.is_child]
     warnings = [row for row in top_rows if row.level == "warning"]
     attentions = [row for row in top_rows if row.level == "attention"]
@@ -372,6 +393,7 @@ def _build_nutrition_advice_summary(rows: list[NutritionTableRowSchema]) -> str 
 
     if warnings or attentions:
         concern_rows = (warnings + attentions)[:2]
+        # 只挑最重要的两项，避免建议过长稀释用户真正需要关注的信息。
         concern_text = "、".join(
             f"{row.name_cn}{f'（占NRV的{row.nrv_label}）' if row.nrv_label else ''}"
             for row in concern_rows
@@ -399,6 +421,7 @@ def _build_nutrition_advice_summary(rows: list[NutritionTableRowSchema]) -> str 
 
 
 def _build_nutrition_table(nutrition_data: NutritionData | None) -> NutritionTableSchema | None:
+    """把结构化营养数据转换成前端详情页使用的表格模型。"""
     if not nutrition_data or not nutrition_data.items:
         return None
 
@@ -413,6 +436,7 @@ def _build_nutrition_table(nutrition_data: NutritionData | None) -> NutritionTab
             nrv,
             amount_value,
         )
+        # 优先尊重上游已经生成的 level/recommendation，仅在缺失时用规则兜底。
         level = item.level or fallback_level
         recommendation = item.recommendation or fallback_recommendation
         name_cn = str(definition.get("cn") or item.name)
@@ -448,6 +472,7 @@ def _build_nutrition_table(nutrition_data: NutritionData | None) -> NutritionTab
 
 
 def _build_analysis(value: Any, score: int) -> AnalysisSchema:
+    """构造分析摘要部分，尽量从非结构化 JSON 中恢复出稳定字段。"""
     payload = value if isinstance(value, dict) else {}
     return AnalysisSchema(
         score=_coerce_score(payload.get("score"), score),
@@ -464,6 +489,7 @@ def _build_analysis(value: Any, score: int) -> AnalysisSchema:
 
 
 def _build_rag_summary(value: Any) -> RagSummarySchema:
+    """把 RAG 原始命中结果聚合为统计摘要。"""
     validated = _safe_validate(RAGResults, value)
     if validated is None:
         return RagSummarySchema(
@@ -491,6 +517,7 @@ def _build_rag_summary(value: Any) -> RagSummarySchema:
 
 
 async def _build_image_url(image_key: str | None, image_url: str | None) -> str:
+    """优先生成新的签名 URL，失败时回退到数据库里已有链接。"""
     if not image_key:
         return image_url or ""
     try:
@@ -505,6 +532,11 @@ async def get_report_list(
     page_size: int,
     db: AsyncSession,
 ) -> ReportListResponseSchema:
+    """分页查询报告列表。
+
+    Returns:
+        ReportListResponseSchema: 已附带图片访问地址的列表页数据。
+    """
     total_result = await db.execute(
         select(func.count())
         .select_from(Report)
@@ -585,6 +617,11 @@ async def get_report_detail(
     user_id: uuid.UUID,
     db: AsyncSession,
 ) -> ReportDetailResponseSchema:
+    """构造单份报告详情。
+
+    Returns:
+        ReportDetailResponseSchema: 适配详情页的完整报告结构。
+    """
     result = await db.execute(
         select(Report, AnalysisTask.image_key, AnalysisTask.image_url)
         .join(AnalysisTask, AnalysisTask.id == Report.task_id)
@@ -618,6 +655,7 @@ async def get_report_detail(
 async def delete_report(
     report_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
 ) -> None:
+    """软删除指定报告。"""
     result = await db.execute(
         select(Report).where(
             Report.id == report_id,

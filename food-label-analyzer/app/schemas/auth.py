@@ -6,16 +6,22 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.schemas.common import BASE_MODEL_CONFIG
 
+"""认证接口的请求与响应 schema。"""
+
 
 class _AuthSchema(BaseModel):
+    """认证 schema 的公共基类。"""
+
     model_config = BASE_MODEL_CONFIG
 
 
 def _normalize_email(value: str) -> str:
+    """统一邮箱大小写和首尾空白。"""
     return value.strip().lower()
 
 
 def validate_password_strength(password: str) -> str:
+    """校验密码复杂度。"""
     has_upper = re.search(r"[A-Z]", password)
     has_lower = re.search(r"[a-z]", password)
     has_digit = re.search(r"\d", password)
@@ -27,6 +33,8 @@ def validate_password_strength(password: str) -> str:
 
 
 class SendCodeRequest(_AuthSchema):
+    """发送验证码请求。"""
+
     email: EmailStr = Field(description="Email address", examples=["user@example.com"])
 
     @field_validator("email", mode="before")
@@ -36,6 +44,8 @@ class SendCodeRequest(_AuthSchema):
 
 
 class RegisterRequest(_AuthSchema):
+    """注册请求。"""
+
     email: EmailStr = Field(description="Email address", examples=["user@example.com"])
     code: str = Field(
         min_length=6,
@@ -63,6 +73,8 @@ class RegisterRequest(_AuthSchema):
 
 
 class LoginRequest(_AuthSchema):
+    """登录请求。"""
+
     email: EmailStr = Field(description="Email address", examples=["user@example.com"])
     password: str = Field(
         min_length=1, description="Password", examples=["StrongPass123"]
@@ -75,18 +87,24 @@ class LoginRequest(_AuthSchema):
 
 
 class RefreshTokenRequest(_AuthSchema):
+    """刷新 token 请求。"""
+
     refresh_token: str = Field(
         min_length=1, description="Refresh token", examples=["eyJhbGciOi..."]
     )
 
 
 class LogoutRequest(_AuthSchema):
+    """登出请求。"""
+
     refresh_token: str = Field(
         min_length=1, description="Refresh token to revoke", examples=["eyJhbGciOi..."]
     )
 
 
 class ForgotPasswordRequest(_AuthSchema):
+    """忘记密码请求。"""
+
     email: EmailStr = Field(description="Email address", examples=["user@example.com"])
 
     @field_validator("email", mode="before")
@@ -96,6 +114,8 @@ class ForgotPasswordRequest(_AuthSchema):
 
 
 class ResetPasswordRequest(_AuthSchema):
+    """重置密码请求。"""
+
     token: str = Field(
         min_length=1, description="Password reset token", examples=["reset-token-value"]
     )
@@ -113,6 +133,8 @@ class ResetPasswordRequest(_AuthSchema):
 
 
 class TokenResponse(_AuthSchema):
+    """登录或刷新后的 token 响应。"""
+
     access_token: str = Field(description="Access token", examples=["eyJhbGciOi..."])
     refresh_token: str = Field(description="Refresh token", examples=["eyJhbGciOi..."])
     token_type: str = Field(
@@ -122,6 +144,8 @@ class TokenResponse(_AuthSchema):
 
 
 class CooldownResponse(_AuthSchema):
+    """验证码发送冷却响应。"""
+
     cooldown_seconds: int = Field(
         ge=0,
         description="Cooldown duration in seconds before the next request",

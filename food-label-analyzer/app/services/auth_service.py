@@ -39,6 +39,8 @@ from app.schemas.auth import TokenResponse, validate_password_strength
 from app.services.email_service import send_reset_email as dispatch_reset_email
 from app.services.email_service import send_verification_email
 
+"""认证领域服务，负责验证码、注册、登录与密码重置流程。"""
+
 EMAIL_VERIFY_CODE_EXPIRE_SECONDS = 300
 RESET_TOKEN_EXPIRE_SECONDS = 900
 EMAIL_COOLDOWN_SECONDS = 60
@@ -46,12 +48,14 @@ _DUMMY_PASSWORD_HASH = pwd_context.hash("CodexDummyPassword123")
 
 
 def _normalize_email(email: str) -> str:
+    """统一邮箱格式，避免同一邮箱出现大小写或空格差异。"""
     return email.strip().lower()
 
 
 async def _revoke_all_refresh_tokens_for_user(
     user_id: uuid.UUID, db: AsyncSession
 ) -> None:
+    """撤销用户当前仍有效的所有 refresh token。"""
     result = await db.execute(
         select(RefreshToken).where(
             RefreshToken.user_id == user_id,
@@ -64,6 +68,15 @@ async def _revoke_all_refresh_tokens_for_user(
 
 
 async def _issue_token_response(user: User, db: AsyncSession) -> TokenResponse:
+    """签发并持久化一组新的访问凭证。
+
+    Params:
+        user: 已通过认证的用户对象。
+        db: 数据库会话。
+
+    Returns:
+        TokenResponse: access token、refresh token 及过期信息。
+    """
     settings = get_settings()
     refresh_jti = uuid.uuid4().hex
     refresh_token = create_refresh_token(str(user.id), jti=refresh_jti)
@@ -83,6 +96,7 @@ async def _issue_token_response(user: User, db: AsyncSession) -> TokenResponse:
 
 
 def _ensure_password_strength(password: str) -> None:
+    """将 schema 层的密码强度校验错误转换为业务异常。"""
     try:
         validate_password_strength(password)
     except ValueError as exc:
@@ -90,6 +104,16 @@ def _ensure_password_strength(password: str) -> None:
 
 
 async def send_register_code(email: str, db: AsyncSession, redis: Redis) -> int:
+    """发送注册验证码并写入冷却时间。
+
+    Params:
+        email: 待注册邮箱。
+        db: 数据库会话。
+        redis: Redis 客户端。
+
+    Returns:
+        int: 下次允许发送验证码前的冷却秒数。
+    """
     normalized_email = _normalize_email(email)
     existing_user = await db.execute(
         select(User).where(User.email == normalized_email, User.is_verified.is_(True))
@@ -112,11 +136,13 @@ async def send_register_code(email: str, db: AsyncSession, redis: Redis) -> int:
     db.add(verification)
     await db.flush()
     await redis.set(cooldown_key, "1", ex=EMAIL_COOLDOWN_SECONDS)
+    # 邮件发送放到后台任务，避免接口响应时间被外部 SMTP 服务拖慢。
     asyncio.create_task(send_verification_email(normalized_email, verification.code))
     return EMAIL_COOLDOWN_SECONDS
 
 
 async def register_user(email: str, code: str, password: str, db: AsyncSession) -> None:
+    """校验验证码并创建正式用户账号。"""
     normalized_email = _normalize_email(email)
     _ensure_password_strength(password)
     now = datetime.now(timezone.utc)
@@ -158,10 +184,12 @@ async def register_user(email: str, code: str, password: str, db: AsyncSession) 
 
 
 async def login_user(email: str, password: str, db: AsyncSession) -> TokenResponse:
+    """执行登录校验并返回 token。"""
     normalized_email = _normalize_email(email)
     result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
     if user is None:
+        # 即使用户不存在也执行一次密码哈希校验，减少基于响应时间的账号枚举风险。
         verify_password(password, _DUMMY_PASSWORD_HASH)
         raise InvalidCredentialsError()
 
@@ -176,6 +204,7 @@ async def login_user(email: str, password: str, db: AsyncSession) -> TokenRespon
 
 
 async def logout_user(refresh_token: str, db: AsyncSession) -> None:
+    """注销单个 refresh token。"""
     payload = decode_token(refresh_token)
     if payload.get("type") != REFRESH_TOKEN_TYPE:
         raise TokenInvalidError()
@@ -194,6 +223,7 @@ async def logout_user(refresh_token: str, db: AsyncSession) -> None:
 
 
 async def refresh_tokens(refresh_token: str, db: AsyncSession) -> TokenResponse:
+    """轮换 refresh token，并返回新的一组凭证。"""
     payload = decode_token(refresh_token)
     if payload.get("type") != REFRESH_TOKEN_TYPE:
         raise TokenInvalidError()
@@ -227,6 +257,7 @@ async def refresh_tokens(refresh_token: str, db: AsyncSession) -> TokenResponse:
 
 
 async def send_reset_email(email: str, db: AsyncSession, redis: Redis) -> None:
+    """发起密码重置邮件，但不暴露邮箱是否真实存在。"""
     normalized_email = _normalize_email(email)
     cooldown_key = f"cooldown:reset:{normalized_email}"
     if await redis.exists(cooldown_key):
@@ -246,12 +277,14 @@ async def send_reset_email(email: str, db: AsyncSession, redis: Redis) -> None:
         )
         db.add(reset_token)
         await db.flush()
+        # 只有真实用户才发送邮件，但接口层始终返回统一结果，避免信息泄漏。
         asyncio.create_task(dispatch_reset_email(normalized_email, reset_token.token))
 
     await redis.set(cooldown_key, "1", ex=EMAIL_COOLDOWN_SECONDS)
 
 
 async def reset_password(token: str, new_password: str, db: AsyncSession) -> None:
+    """根据重置令牌更新密码并失效历史登录状态。"""
     _ensure_password_strength(new_password)
     now = datetime.now(timezone.utc)
 

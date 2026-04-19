@@ -3,6 +3,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
+/** 通用按钮组件属性。 */
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
@@ -11,6 +12,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', isLoading, children, disabled, ...props }, ref) => {
+    /** 按 variant 和 size 组装样式，保证业务页面只关心语义。 */
     const variants = {
       primary: 'bg-primary text-white hover:bg-primary/90 shadow-sm shadow-emerald-500/20',
       secondary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm shadow-slate-900/10',

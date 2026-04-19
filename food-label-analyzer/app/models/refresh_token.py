@@ -9,11 +9,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
+"""Refresh token 持久化模型。"""
+
 if TYPE_CHECKING:
     from app.models.user import User
 
 
 class RefreshToken(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """可撤销的 refresh token 记录。"""
+
     __tablename__ = "refresh_tokens"
     __table_args__ = (
         Index("idx_refresh_tokens_user_id", "user_id"),

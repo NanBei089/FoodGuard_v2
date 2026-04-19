@@ -5,6 +5,7 @@ import { fetchSessionContext } from '@/lib/auth-session';
 import { cn } from '@/lib/utils';
 import { getUserInitial } from '@/lib/foodguard';
 
+/** 已登录区域的统一布局，负责守卫路由和恢复会话上下文。 */
 export function AppLayout() {
   const location = useLocation();
   const { isAuthenticated, needsOnboarding, user, preferences, setSession } = useAuthStore();
@@ -23,7 +24,7 @@ export function AppLayout() {
           setSession(session.user, session.preferences);
         }
       } catch {
-        // Keep the existing UI state. Auth failures are already handled by the API client.
+        // 401 等登录态问题已经由 API client 处理，这里不重复跳转，避免界面闪烁。
       }
     };
 
@@ -39,6 +40,7 @@ export function AppLayout() {
   }
 
   if (needsOnboarding && location.pathname !== '/onboarding') {
+    // 未完成偏好初始化前，强制导向 onboarding，保证后续分析有最基本的个性化上下文。
     return <Navigate to="/onboarding" replace />;
   }
 

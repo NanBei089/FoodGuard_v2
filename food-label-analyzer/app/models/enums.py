@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import enum
 
+"""数据库与业务层共享的枚举值。"""
+
 
 class TaskStatus(str, enum.Enum):
-    """Forward-looking task status enum reserved for DOC-02 and DOC-04."""
+    """分析任务内部状态。"""
 
     PENDING = "pending"
     PROCESSING = "processing"
@@ -13,14 +15,14 @@ class TaskStatus(str, enum.Enum):
 
 
 class VerificationType(str, enum.Enum):
-    """Forward-looking email verification type enum reserved for DOC-02 and DOC-03."""
+    """邮箱验证码用途。"""
 
     REGISTER = "register"
     RESET_PASSWORD = "reset_password"
 
 
 class NutritionParseSource(str, enum.Enum):
-    """Forward-looking nutrition parse source enum reserved for DOC-05 and DOC-06."""
+    """营养成分解析来源。"""
 
     TABLE_RECOGNITION = "table_recognition"
     OCR_TEXT = "ocr_text"

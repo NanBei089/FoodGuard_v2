@@ -14,8 +14,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import get_settings
 
+"""使用 Ollama embedding 重建 ChromaDB 集合的维护脚本。"""
+
 
 def _embed_texts(texts: list[str], base_url: str, model: str, timeout_s: float) -> list[list[float]]:
+    """批量请求 Ollama embedding。"""
     endpoint = f"{base_url.rstrip('/')}/api/embed"
     payload = {
         "model": model,
@@ -40,6 +43,7 @@ def _embed_texts(texts: list[str], base_url: str, model: str, timeout_s: float) 
 
 
 def _build_source(document: str, metadata: dict[str, Any]) -> str:
+    """拼接 metadata 和正文，构造更适合向量化的源文本。"""
     chunks: list[str] = []
     term = metadata.get("term") or metadata.get("name") or metadata.get("ingredient") or ""
     normalized_term = metadata.get("normalized_term") or ""
@@ -61,6 +65,7 @@ def rebuild_collection(
     timeout_s: float,
     batch_size: int,
 ) -> dict[str, Any]:
+    """重建单个 Chroma collection。"""
     source = client.get_collection(name=collection_name)
     payload = source.get(include=["documents", "metadatas"])
     ids = payload.get("ids") or []
@@ -71,6 +76,7 @@ def rebuild_collection(
         raise RuntimeError(f"collection is empty: {collection_name}")
 
     try:
+        # 直接重建集合可以避免旧 embedding 维度和新模型维度混用。
         client.delete_collection(collection_name)
     except Exception:
         pass
@@ -110,6 +116,7 @@ def rebuild_collection(
 
 
 def parse_args() -> argparse.Namespace:
+    """解析命令行参数。"""
     settings = get_settings()
     parser = argparse.ArgumentParser(description="Rebuild ChromaDB collections with Ollama embeddings.")
     parser.add_argument("--db-dir", default=str(settings.CHROMADB_PATH), help="Chroma persistence directory.")
@@ -123,6 +130,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """脚本入口。"""
     args = parse_args()
     db_dir = Path(args.db_dir)
     if not db_dir.exists():
@@ -154,4 +162,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

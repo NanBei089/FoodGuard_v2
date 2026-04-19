@@ -22,6 +22,8 @@ from app.services.task_service import (
 )
 from app.tasks.celery_app import celery_app
 
+"""图片分析任务相关 API。"""
+
 router = APIRouter()
 
 
@@ -43,6 +45,16 @@ async def upload_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[TaskCreateResponse]:
+    """上传图片并创建分析任务。
+
+    Params:
+        file: 用户上传的食品标签图片。
+        current_user: 当前登录用户。
+        db: 数据库会话。
+
+    Returns:
+        ApiResponse[TaskCreateResponse]: 新创建任务的基础信息。
+    """
     storage_service = get_storage_service()
     file_bytes, content_type = await validate_file(file)
     await check_concurrent_limit(current_user.id, db)
@@ -61,6 +73,7 @@ async def upload_image(
         )
         await update_celery_task_id(task.id, celery_result.id, db)
     except Exception as exc:
+        # 任务未成功入队时立即删除已上传原图，避免对象存储中残留孤儿文件。
         try:
             await storage_service.delete_image(image_key)
         except Exception:
@@ -93,6 +106,16 @@ async def get_task_status(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[TaskStatusResponse]:
+    """查询指定任务的当前状态。
+
+    Params:
+        task_id: 任务主键。
+        current_user: 当前登录用户。
+        db: 数据库会话。
+
+    Returns:
+        ApiResponse[TaskStatusResponse]: 任务状态、错误信息和报告关联信息。
+    """
     task = await get_task_with_permission(task_id, current_user.id, db)
     payload = await get_task_status_payload(task, db)
     return success_response(payload)

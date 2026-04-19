@@ -9,11 +9,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
+"""密码重置令牌 ORM 模型。"""
+
 if TYPE_CHECKING:
     from app.models.user import User
 
 
 class PasswordResetToken(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """一次性密码重置 token。"""
+
     __tablename__ = "password_reset_tokens"
     __table_args__ = (
         Index("idx_password_reset_tokens_user_id", "user_id"),

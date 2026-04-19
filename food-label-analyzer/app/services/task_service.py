@@ -26,8 +26,11 @@ from app.schemas.analysis import (
     to_external_task_status,
 )
 
+"""分析任务服务，负责上传校验、任务创建与状态投影。"""
+
 
 def _detect_image_type(data: bytes) -> str | None:
+    """基于文件魔数识别图片类型，避免只依赖扩展名。"""
     if data[:3] == b"\xff\xd8\xff":
         return "image/jpeg"
     if data[:4] == b"\x89PNG":
@@ -38,6 +41,14 @@ def _detect_image_type(data: bytes) -> str | None:
 
 
 async def validate_file(file: UploadFile) -> tuple[bytes, str]:
+    """校验上传图片的完整性、大小与 MIME 类型。
+
+    Params:
+        file: FastAPI 上传文件对象。
+
+    Returns:
+        tuple[bytes, str]: 文件字节流与识别出的 content type。
+    """
     settings = get_settings()
     if file is None or not file.filename:
         raise InvalidFileTypeError("上传文件缺失")
@@ -53,6 +64,7 @@ async def validate_file(file: UploadFile) -> tuple[bytes, str]:
         raise InvalidFileTypeError("仅支持 JPG、PNG 和 WEBP 图片")
 
     try:
+        # 额外做一次 Pillow 校验，尽早拦住损坏图片，避免后续 OCR/YOLO 才暴露问题。
         with Image.open(io.BytesIO(file_bytes)) as image:
             image.verify()
     except (UnidentifiedImageError, OSError, ValueError) as exc:
@@ -62,6 +74,7 @@ async def validate_file(file: UploadFile) -> tuple[bytes, str]:
 
 
 async def check_concurrent_limit(user_id: uuid.UUID, db: AsyncSession) -> None:
+    """校验用户并发分析任务数是否超限。"""
     settings = get_settings()
     result = await db.execute(
         select(func.count())
@@ -82,6 +95,7 @@ async def create_task(
     image_url: str,
     db: AsyncSession,
 ) -> AnalysisTask:
+    """创建待处理分析任务记录。"""
     task = AnalysisTask(
         user_id=user_id,
         image_key=image_key,
@@ -96,6 +110,7 @@ async def create_task(
 async def update_celery_task_id(
     task_id: uuid.UUID, celery_task_id: str, db: AsyncSession
 ) -> None:
+    """回填 Celery 任务 ID，便于排障与追踪。"""
     task = await db.get(AnalysisTask, task_id)
     if task is not None:
         task.celery_task_id = celery_task_id
@@ -107,6 +122,7 @@ async def get_task_with_permission(
     user_id: uuid.UUID,
     db: AsyncSession,
 ) -> AnalysisTask:
+    """按用户权限范围加载任务，防止越权访问。"""
     result = await db.execute(
         select(AnalysisTask)
         .options(selectinload(AnalysisTask.report))
@@ -121,8 +137,10 @@ async def get_task_with_permission(
 async def get_task_status_payload(
     task: AnalysisTask, db: AsyncSession
 ) -> TaskStatusResponse:
+    """把内部任务状态映射成对前端稳定的响应结构。"""
     report = task.report
     if report is None and task.status == TaskStatus.COMPLETED:
+        # Worker 完成和 ORM 关系刷新可能存在短暂竞态，这里补查一次确保状态可见。
         result = await db.execute(select(Report).where(Report.task_id == task.id))
         report = result.scalar_one_or_none()
     external_status = cast(

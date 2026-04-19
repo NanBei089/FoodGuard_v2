@@ -7,15 +7,21 @@ from pydantic import BaseModel, Field
 
 from app.schemas.common import BASE_MODEL_CONFIG
 
+"""健康检查接口 schema。"""
+
 ServiceState = Literal["up", "down"]
 HealthStatus = Literal["healthy", "degraded"]
 
 
 class _HealthSchema(BaseModel):
+    """健康检查 schema 的公共基类。"""
+
     model_config = BASE_MODEL_CONFIG
 
 
 class HealthServicesSchema(_HealthSchema):
+    """各依赖服务的健康状态。"""
+
     database: ServiceState = Field(
         description="Database connectivity status", examples=["up"]
     )
@@ -40,6 +46,8 @@ class HealthServicesSchema(_HealthSchema):
 
 
 class HealthCheckResponse(_HealthSchema):
+    """健康检查响应。"""
+
     status: HealthStatus = Field(
         description="Overall health status", examples=["healthy"]
     )

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Create axios instance with base URL
+/** 统一的前端 API 客户端，负责鉴权注入和 token 刷新。 */
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   timeout: 10000,
@@ -9,11 +9,11 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor for API calls
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
+      // 在这里统一注入 Bearer token，避免每个请求点重复处理鉴权头。
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -23,7 +23,6 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for API calls
 apiClient.interceptors.response.use(
   (response) => {
     return response.data;
@@ -45,10 +44,11 @@ apiClient.interceptors.response.use(
             localStorage.setItem('access_token', res.data.data.access_token);
             localStorage.setItem('refresh_token', res.data.data.refresh_token);
             apiClient.defaults.headers.common['Authorization'] = `Bearer ${res.data.data.access_token}`;
+            // 刷新成功后重放原请求，最大限度减少用户感知到的登录态中断。
             return apiClient(originalRequest);
           }
         } catch (refreshError) {
-          // If refresh fails, clear tokens and redirect to login
+          // refresh 失败说明当前登录态已经不可恢复，直接清空本地凭证并回到登录页。
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           window.location.href = '/login';

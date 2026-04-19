@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import type { ApiResponse, PageResponse } from '@/types/api';
 import type { User, UserPreferences } from '@/types/auth';
 
+/** 仅关心报告总数的简化分页结构。 */
 interface ReportListMeta {
   total: number;
 }
@@ -29,6 +30,7 @@ const healthConditionOptions = [
   { id: 'hyperuricemia', label: '高尿酸 / 痛风' },
 ];
 
+/** 个人资料页，负责资料、偏好、密码与登出相关操作。 */
 export default function Profile() {
   const navigate = useNavigate();
   const { user, setUser, preferences: storePreferences, setPreferences, logout } = useAuthStore();
@@ -82,10 +84,12 @@ export default function Profile() {
       }
     };
 
+    // 页面初始化时一次性拉齐资料、偏好和统计数据，避免多个区块各自闪动。
     fetchData();
   }, [setPreferences, setUser]);
 
   const toggleArrayItem = (key: 'focus_groups' | 'health_conditions', value: string) => {
+    /** 切换多选偏好项。 */
     setLocalPreferences((current) => {
       const items = current[key];
       return {
@@ -96,6 +100,7 @@ export default function Profile() {
   };
 
   const toggleAllergyCondition = () => {
+    /** 过敏条件和过敏原输入联动，保持状态一致。 */
     setLocalPreferences((current) => {
       const hasAllergy = current.health_conditions.includes('allergy');
       return {
@@ -109,6 +114,7 @@ export default function Profile() {
   };
 
   const addAllergy = () => {
+    /** 追加一个过敏原标签。 */
     const nextItem = allergyInput.trim();
     if (!nextItem || preferences.allergies.includes(nextItem)) {
       return;
@@ -125,6 +131,7 @@ export default function Profile() {
   };
 
   const removeAllergy = (item: string) => {
+    /** 删除一个过敏原标签。 */
     setLocalPreferences((current) => ({
       ...current,
       allergies: current.allergies.filter((entry) => entry !== item),
@@ -132,6 +139,7 @@ export default function Profile() {
   };
 
   const handleSave = async () => {
+    /** 并行保存昵称和偏好设置。 */
     setSavingProfile(true);
     setProfileMessage('');
 
@@ -166,6 +174,7 @@ export default function Profile() {
   };
 
   const clearPasswordFieldError = (field: string) => {
+    /** 当用户继续输入时，仅清理对应字段的密码错误。 */
     setPasswordMessage('');
     setPasswordErrors((current) => {
       if (!current[field]) {
@@ -178,6 +187,7 @@ export default function Profile() {
   };
 
   const handleChangePassword = async (event: React.FormEvent) => {
+    /** 提交修改密码请求。 */
     event.preventDefault();
     setPasswordMessage('');
     setPasswordErrors({});

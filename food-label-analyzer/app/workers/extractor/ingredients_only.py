@@ -21,12 +21,15 @@ from app.workers.extractor.rule_config import (
     SPACE_RE,
 )
 
+"""仅配料输出构造器，用于把配料主题转换成标准 items 列表。"""
+
 
 def build_ingredients_output(
     ingredient_topic: dict[str, Any],
     roi_id: str,
     input_json: str,
 ) -> dict[str, Any]:
+    """构造配料提取结果。"""
     raw_text = str(ingredient_topic.get("text") or "")
     trace_meta = (
         ingredient_topic.get("trace", {}) if isinstance(ingredient_topic, dict) else {}
@@ -60,6 +63,7 @@ def build_ingredients_output(
 
 
 def _split_ingredient_terms(text: str) -> list[str]:
+    """拆分并清洗配料项。"""
     segment = _prepare_ingredient_segment(text)["text"]
     if not segment:
         return []
@@ -84,6 +88,7 @@ def _split_ingredient_terms(text: str) -> list[str]:
 
 
 def _prepare_ingredient_segment(text: str) -> dict[str, str]:
+    """裁剪配料片段中的起止锚点和噪声。"""
     segment = str(text or "").strip()
     start_anchor = ""
     end_anchor = ""
@@ -115,6 +120,7 @@ def _prepare_ingredient_segment(text: str) -> dict[str, str]:
 
 
 def _expand_token(token: str) -> list[str]:
+    """展开单个配料 token，处理复合配料括号结构。"""
     normalized = _normalize_simple_term(token, keep_spaces=True)
     if not normalized:
         return []
@@ -128,6 +134,7 @@ def _expand_token(token: str) -> list[str]:
     inner = wrapped_match.group("inner")
 
     if INGREDIENT_CATEGORY_WRAPPER_RE.fullmatch(outer):
+        # “食品添加剂（A、B）”这类外层只是分类名，真正配料在括号内。
         nested_terms: list[str] = []
         for nested in _merge_fragmented_tokens(_split_top_level(inner)):
             nested_term = _normalize_simple_term(nested)
@@ -149,6 +156,7 @@ def _expand_token(token: str) -> list[str]:
 
 
 def _merge_fragmented_tokens(tokens: list[str]) -> list[str]:
+    """修复 OCR 把“单/双”等前缀拆开的情况。"""
     merged: list[str] = []
     index = 0
 
@@ -171,6 +179,7 @@ def _merge_fragmented_tokens(tokens: list[str]) -> list[str]:
 
 
 def _split_top_level(text: str) -> list[str]:
+    """按括号外的顶层分隔符拆分配料。"""
     tokens: list[str] = []
     buffer: list[str] = []
     depth = 0
@@ -200,10 +209,12 @@ def _split_top_level(text: str) -> list[str]:
 
 
 def _coerce_merge_token(token: str) -> str:
+    """把 token 归一化为用于前缀合并判断的形式。"""
     return _normalize_ingredient_text(token).replace(" ", "")
 
 
 def _normalize_simple_term(token: str, keep_spaces: bool = False) -> str:
+    """清洗并校验单个配料名。"""
     normalized = _normalize_ingredient_text(token, keep_spaces=keep_spaces)
     normalized = INGREDIENT_PAREN_MEASURE_SUFFIX_RE.sub("", normalized)
     normalized = INGREDIENT_MEASURE_SUFFIX_RE.sub("", normalized)
@@ -222,6 +233,7 @@ def _normalize_simple_term(token: str, keep_spaces: bool = False) -> str:
 
 
 def _normalize_ingredient_text(text: str, keep_spaces: bool = True) -> str:
+    """执行配料文本通用归一化。"""
     normalized = str(text or "")
     for source, target in INGREDIENT_LATEX_REPLACEMENTS:
         normalized = normalized.replace(source, target)
@@ -233,6 +245,7 @@ def _normalize_ingredient_text(text: str, keep_spaces: bool = True) -> str:
 
 
 def _normalize_anchor(anchor: str) -> str:
+    """归一化配料主题锚点。"""
     return SPACE_RE.sub("", str(anchor or "")).strip()
 
 

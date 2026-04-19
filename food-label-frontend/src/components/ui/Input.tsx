@@ -2,12 +2,14 @@ import { forwardRef } from 'react';
 import type { InputHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
+/** 通用输入框属性。 */
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, error, ...props }, ref) => {
+    /** 输入框和错误提示绑定在一起，便于表单字段级校验复用。 */
     return (
       <div className="w-full">
         <input

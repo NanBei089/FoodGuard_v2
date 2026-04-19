@@ -11,6 +11,8 @@ from app.schemas.analysis_data import (
     RAGResults,
 )
 
+"""规则打分模块，用于为 LLM 输出提供可解释的基础分。"""
+
 NRV_THRESHOLDS = {
     "sodium": {"low": 20, "medium": 40, "high": 60, "very_high": 80},
     "sugar": {"low": 10, "medium": 20, "high": 30},
@@ -37,6 +39,8 @@ ALLERGEN_PENALTIES = {
 
 @dataclass
 class NutritionScore:
+    """营养维度子分数。"""
+
     protein_score: float = 100.0
     fat_score: float = 100.0
     carb_score: float = 100.0
@@ -46,6 +50,8 @@ class NutritionScore:
 
 @dataclass
 class ComponentScores:
+    """综合评分的各组成部分。"""
+
     nutrition: NutritionScore = field(default_factory=NutritionScore)
     sodium: float = 100.0
     sugar: float = 100.0
@@ -54,6 +60,7 @@ class ComponentScores:
 
 
 def _parse_nrv(nrv_str: str | None) -> float:
+    """把 NRV 百分比字符串解析为数值。"""
     if not nrv_str:
         return 0.0
     try:
@@ -64,6 +71,7 @@ def _parse_nrv(nrv_str: str | None) -> float:
 
 
 def _parse_nutrition_value(value_str: str) -> float:
+    """把营养含量字符串解析为数值。"""
     if not value_str:
         return 0.0
     try:
@@ -73,6 +81,11 @@ def _parse_nutrition_value(value_str: str) -> float:
 
 
 def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
+    """根据营养成分表计算营养均衡分。
+
+    Returns:
+        NutritionScore: 蛋白质、脂肪、碳水、纤维及综合分。
+    """
     result = NutritionScore()
 
     if not nutrition_data or not nutrition_data.items:
@@ -82,6 +95,7 @@ def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
     item_map: dict[str, NutritionItem] = {}
     for item in nutrition_data.items:
         name_lower = item.name.lower()
+        # 这里按关键词做宽松归类，是为了兼容 OCR/LLM 输出中中英文混杂或字段不规范的情况。
         if "能量" in item.name or "energy" in name_lower or "千焦" in item.name:
             item_map["energy"] = item
         elif "蛋白质" in item.name or "protein" in name_lower:
@@ -165,6 +179,7 @@ def score_nutrition(nutrition_data: NutritionData | None) -> NutritionScore:
 
 
 def score_sodium(nutrition_data: NutritionData | None) -> float:
+    """计算钠含量分数。"""
     if not nutrition_data or not nutrition_data.items:
         return 70.0
 
@@ -191,6 +206,7 @@ def score_sodium(nutrition_data: NutritionData | None) -> float:
 
 
 def score_sugar(nutrition_data: NutritionData | None) -> float:
+    """计算糖分风险分数。"""
     if not nutrition_data or not nutrition_data.items:
         return 70.0
 
@@ -216,6 +232,7 @@ def score_sugar(nutrition_data: NutritionData | None) -> float:
 
 
 def _classify_additive(name: str) -> str:
+    """按关键词把添加剂归类到规则打分类别。"""
     name_lower = name.lower()
     if any(k in name_lower for k in ["防腐", "preserv", "山梨", "苯甲", "亚硫酸"]):
         return "preservative"
@@ -233,6 +250,7 @@ def _classify_additive(name: str) -> str:
 
 
 def score_additives(ingredients: list[IngredientItem]) -> float:
+    """基于添加剂类型与风险等级计算扣分。"""
     penalty = 0.0
     additive_count = 0
 
@@ -252,6 +270,7 @@ def score_additives(ingredients: list[IngredientItem]) -> float:
 
 
 def score_allergens(ingredients: list[IngredientItem]) -> float:
+    """基于常见过敏原命中数量计算风险分。"""
     allergen_keywords = [
         "麸质",
         "小麦",
@@ -301,6 +320,7 @@ def calculate_health_score(
     ingredients: list[IngredientItem],
     rag_results: RAGResults | None = None,
 ) -> tuple[int, ComponentScores]:
+    """汇总所有规则分，产出最终健康分与分项明细。"""
     nutrition_score = score_nutrition(nutrition_data)
     sodium_score = score_sodium(nutrition_data)
     sugar_score = score_sugar(nutrition_data)
@@ -329,6 +349,7 @@ def calculate_health_score(
 
 
 def format_score_breakdown(component: ComponentScores) -> str:
+    """把分项分数格式化为可读文本，便于日志或提示词注入。"""
     lines = [
         "【评分明细】",
         f"  营养均衡: {component.nutrition.total:.1f}/100",

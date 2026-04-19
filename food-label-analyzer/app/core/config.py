@@ -6,8 +6,12 @@ from functools import lru_cache
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+"""应用配置定义，集中约束环境变量和派生配置。"""
+
 
 class Settings(BaseSettings):
+    """从环境变量和 `.env` 加载的应用配置。"""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -143,28 +147,34 @@ class Settings(BaseSettings):
 
     @property
     def is_development(self) -> bool:
+        """判断当前是否为开发环境。"""
         return self.APP_ENV == "development"
 
     @property
     def jwt_access_expire_timedelta(self) -> timedelta:
+        """返回 access token 过期时间间隔。"""
         return timedelta(minutes=self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
 
     @property
     def jwt_refresh_expire_timedelta(self) -> timedelta:
+        """返回 refresh token 过期时间间隔。"""
         return timedelta(days=self.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
 
     @property
     def max_upload_size_bytes(self) -> int:
+        """把 MB 上传限制转换为字节数。"""
         return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     @property
     def allowed_image_types_list(self) -> list[str]:
+        """把逗号分隔的 MIME 类型配置转换为列表。"""
         return [
             item.strip() for item in self.ALLOWED_IMAGE_TYPES.split(",") if item.strip()
         ]
 
     @property
     def minio_client_endpoint(self) -> str:
+        """生成 MinIO SDK 使用的 endpoint。"""
         endpoint = self.MINIO_ENDPOINT.strip()
         if endpoint == "localhost":
             return "127.0.0.1"
@@ -174,6 +184,7 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
+        """把 CORS_ORIGINS 转换为 FastAPI CORS 中间件需要的列表。"""
         if self.CORS_ORIGINS.strip() == "*":
             return ["*"]
         return [item.strip() for item in self.CORS_ORIGINS.split(",") if item.strip()]
@@ -181,6 +192,7 @@ class Settings(BaseSettings):
     @field_validator("APP_SECRET_KEY")
     @classmethod
     def validate_app_secret_key(cls, value: SecretStr) -> SecretStr:
+        """校验应用密钥长度，避免弱 JWT 签名密钥。"""
         if len(value.get_secret_value()) < 32:
             raise ValueError("APP_SECRET_KEY length must be at least 32 characters")
         return value
@@ -188,6 +200,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, value: str) -> str:
+        """校验异步数据库连接串。"""
         if not value.startswith("postgresql+asyncpg://"):
             raise ValueError("DATABASE_URL must start with postgresql+asyncpg://")
         return value
@@ -195,6 +208,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_SYNC_URL")
     @classmethod
     def validate_database_sync_url(cls, value: str) -> str:
+        """校验同步数据库连接串。"""
         if not value.startswith("postgresql+psycopg://"):
             raise ValueError("DATABASE_SYNC_URL must start with postgresql+psycopg://")
         return value
@@ -202,6 +216,7 @@ class Settings(BaseSettings):
     @field_validator("REDIS_URL")
     @classmethod
     def validate_redis_url(cls, value: str) -> str:
+        """校验 Redis 连接串。"""
         if not value.startswith("redis://"):
             raise ValueError("REDIS_URL must start with redis://")
         return value
@@ -209,6 +224,7 @@ class Settings(BaseSettings):
     @field_validator("YOLO_CONFIDENCE_THRESHOLD")
     @classmethod
     def validate_yolo_confidence_threshold(cls, value: float) -> float:
+        """校验 YOLO 置信度阈值范围。"""
         if not 0 < value < 1:
             raise ValueError("YOLO_CONFIDENCE_THRESHOLD must be between 0 and 1")
         return value
@@ -216,6 +232,7 @@ class Settings(BaseSettings):
     @field_validator("SMTP_PORT")
     @classmethod
     def validate_smtp_port(cls, value: int) -> int:
+        """校验常见 SMTP 端口。"""
         if value not in {25, 465, 587, 2525}:
             raise ValueError("SMTP_PORT must be one of 25, 465, 587, 2525")
         return value
@@ -223,6 +240,7 @@ class Settings(BaseSettings):
     @field_validator("MAX_UPLOAD_SIZE_MB")
     @classmethod
     def validate_max_upload_size_mb(cls, value: int) -> int:
+        """限制上传大小配置在合理范围内。"""
         if not 1 <= value <= 50:
             raise ValueError("MAX_UPLOAD_SIZE_MB must be between 1 and 50")
         return value
@@ -230,6 +248,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
+    """返回缓存后的 Settings 实例。"""
     return Settings()
 
 

@@ -13,12 +13,18 @@ from app.schemas.analysis_data import NutritionData as NutritionSchema
 from app.schemas.analysis_data import NutritionItem as NutritionItemSchema
 from app.schemas.common import BASE_MODEL_CONFIG, PageResponse
 
+"""报告列表与详情接口 schema。"""
+
 
 class _ReportSchema(BaseModel):
+    """报告 schema 的公共基类。"""
+
     model_config = BASE_MODEL_CONFIG
 
 
 class AnalysisSchema(_ReportSchema):
+    """报告中的结构化健康分析结果。"""
+
     score: int = Field(description="Overall health score", examples=[85])
     summary: str | None = Field(
         default=None,
@@ -46,6 +52,8 @@ class AnalysisSchema(_ReportSchema):
 
 
 class RagSummarySchema(_ReportSchema):
+    """RAG 命中质量摘要。"""
+
     total_ingredients: int = Field(description="Total ingredient count", examples=[6])
     retrieved_count: int = Field(description="Ingredients matched in RAG", examples=[4])
     high_match_count: int = Field(description="High-confidence matches", examples=[3])
@@ -54,6 +62,8 @@ class RagSummarySchema(_ReportSchema):
 
 
 class NutritionTableRowSchema(_ReportSchema):
+    """前端营养成分表中的单行数据。"""
+
     nutrient_key: str = Field(description="Canonical nutrient key", examples=["sodium"])
     name_cn: str = Field(description="Chinese nutrient label", examples=["钠"])
     name_en: str | None = Field(
@@ -87,6 +97,8 @@ class NutritionTableRowSchema(_ReportSchema):
 
 
 class NutritionTableSchema(_ReportSchema):
+    """前端详情页使用的结构化营养成分表。"""
+
     title: str = Field(default="营养成分表", description="Section title")
     subtitle: str | None = Field(
         default=None,
@@ -117,6 +129,8 @@ class NutritionTableSchema(_ReportSchema):
 
 
 class ReportListItemSchema(_ReportSchema):
+    """报告列表项。"""
+
     report_id: UUID = Field(description="Report identifier")
     task_id: UUID = Field(description="Task identifier")
     score: int = Field(description="Overall health score", examples=[85])
@@ -133,10 +147,14 @@ class ReportListItemSchema(_ReportSchema):
 
 
 class ReportListResponseSchema(PageResponse[ReportListItemSchema]):
+    """报告列表分页响应。"""
+
     model_config = BASE_MODEL_CONFIG
 
 
 class ReportDetailResponseSchema(_ReportSchema):
+    """报告详情响应。"""
+
     report_id: UUID = Field(description="Report identifier")
     task_id: UUID = Field(description="Task identifier")
     image_url: str = Field(

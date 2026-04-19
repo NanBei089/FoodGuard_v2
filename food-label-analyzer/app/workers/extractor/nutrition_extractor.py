@@ -13,10 +13,13 @@ from app.workers.extractor.prompts.nutrition_table_llm_parse import (
     build_nutrition_table_llm_parse_prompt,
 )
 
+"""营养成分提取器，把 OCR 表格/文本解析为标准 NutritionData。"""
+
 logger = structlog.get_logger(__name__)
 
 
 def _get_llm_client() -> OpenAI:
+    """创建 DeepSeek/OpenAI 兼容客户端。"""
     settings = get_settings()
     return OpenAI(
         base_url=settings.DEEPSEEK_BASE_URL,
@@ -32,6 +35,7 @@ def _build_result(
     parse_method: str,
     advice_summary: str | None = None,
 ) -> dict[str, Any]:
+    """通过 schema 构造标准营养解析结果。"""
     return NutritionData(
         items=items,
         serving_size=serving_size,
@@ -41,6 +45,7 @@ def _build_result(
 
 
 def _extract_json_payload(content: str) -> dict[str, Any] | None:
+    """从 LLM 响应中提取 JSON 对象。"""
     if not content:
         return None
 
@@ -71,6 +76,7 @@ def _extract_json_payload(content: str) -> dict[str, Any] | None:
 
 
 def _sanitize_table_result(table_result: dict[str, Any] | None) -> dict[str, Any] | None:
+    """从 TableRecognitionResult 包装结构中取出真正的 table_json。"""
     if not isinstance(table_result, dict):
         return None
 
@@ -84,6 +90,7 @@ def _serialize_inputs(
     table_result: dict[str, Any] | None,
     nutrition_raw_text: str | None,
 ) -> dict[str, str]:
+    """把表格和 OCR fallback 文本序列化为提示词输入。"""
     sanitized_table_result = _sanitize_table_result(table_result)
     return {
         "table_result_json": json.dumps(
@@ -101,6 +108,7 @@ def _resolve_parse_method(
     table_result: dict[str, Any] | None,
     nutrition_raw_text: str | None,
 ) -> str:
+    """根据可用输入判断营养解析来源。"""
     if _sanitize_table_result(table_result):
         return "table_recognition"
     if nutrition_raw_text and nutrition_raw_text.strip():
@@ -109,6 +117,7 @@ def _resolve_parse_method(
 
 
 def _render_prompt(template: str, inputs: dict[str, str]) -> str:
+    """使用显式 replace 渲染 prompt，避免 JSON 中的大括号被 format 误处理。"""
     rendered = template
     for key, value in inputs.items():
         rendered = rendered.replace(f"{{{key}}}", value)
@@ -119,6 +128,7 @@ def _llm_parse(
     table_result: dict[str, Any] | None,
     nutrition_raw_text: str | None,
 ) -> dict[str, Any] | None:
+    """调用 LLM 解析营养成分。"""
     parse_method = _resolve_parse_method(table_result, nutrition_raw_text)
     if parse_method == "empty":
         return _build_result([], None, "empty")
@@ -151,6 +161,7 @@ def _llm_parse(
 
 
 def parse(table_result, ocr_fallback_text: str | None = None) -> dict[str, Any]:
+    """解析营养成分表，失败时返回明确的 empty/failed 结构。"""
     table_data = (
         table_result.model_dump()
         if hasattr(table_result, "model_dump")
@@ -169,6 +180,7 @@ def parse(table_result, ocr_fallback_text: str | None = None) -> dict[str, Any]:
         return result
 
     if table_data and ocr_fallback_text:
+        # 表格结构失败后再用 OCR 文本解析一次，提升低质量表格截图的成功率。
         result = _llm_parse(None, ocr_fallback_text)
         if result:
             logger.info(

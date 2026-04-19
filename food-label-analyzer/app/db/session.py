@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 
+"""数据库引擎与会话生命周期管理。"""
+
 settings = get_settings()
 
 engine: AsyncEngine = create_async_engine(
@@ -51,11 +53,13 @@ SyncSessionLocal = sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI 异步数据库会话依赖。"""
     async with AsyncSessionLocal() as session:
         try:
             yield session
             await session.commit()
         except Exception:
+            # 请求处理失败时统一回滚，避免部分写入污染事务。
             await session.rollback()
             raise
         finally:
@@ -63,11 +67,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 def get_engine() -> AsyncEngine:
+    """返回异步 SQLAlchemy Engine。"""
     return engine
 
 
 @contextmanager
 def get_sync_db() -> Generator[Session, None, None]:
+    """同步数据库会话上下文，用于 Celery 等非异步运行环境。"""
     session = SyncSessionLocal()
     try:
         yield session
@@ -80,6 +86,7 @@ def get_sync_db() -> Generator[Session, None, None]:
 
 
 def get_sync_engine() -> Engine:
+    """返回同步 SQLAlchemy Engine。"""
     return sync_engine
 
 

@@ -14,11 +14,16 @@ from tenacity import (
 
 from app.core.config import Settings, get_settings
 
+"""SMTP 邮件发送服务。"""
+
 logger = structlog.get_logger(__name__)
 
 
 class EmailService:
+    """封装验证码和密码重置邮件发送逻辑。"""
+
     def __init__(self, settings: Settings) -> None:
+        """从应用配置初始化 SMTP 参数。"""
         self.host = settings.SMTP_HOST
         self.port = settings.SMTP_PORT
         self.username = settings.SMTP_USERNAME
@@ -28,6 +33,7 @@ class EmailService:
         self.use_tls = settings.SMTP_USE_TLS
 
     async def send_verification_code(self, email: str, code: str) -> None:
+        """发送邮箱验证码邮件。"""
         subject = "Your Food Label Analyzer verification code"
         html_body = (
             "<p>Your verification code is:</p>"
@@ -37,6 +43,7 @@ class EmailService:
         await self._send(email, subject, html_body)
 
     async def send_password_reset(self, email: str, reset_link: str) -> None:
+        """发送密码重置邮件。"""
         subject = "Reset your Food Label Analyzer password"
         html_body = (
             "<p>We received a password reset request for your account.</p>"
@@ -46,6 +53,7 @@ class EmailService:
         await self._send(email, subject, html_body)
 
     async def _send(self, to: str, subject: str, html_body: str) -> None:
+        """执行底层 SMTP 发送，失败时记录日志但不向上抛出。"""
         message = MIMEMultipart("alternative")
         message["Subject"] = subject
         message["From"] = f"{self.from_name} <{self.from_email}>"
@@ -65,6 +73,7 @@ class EmailService:
                 ),
                 reraise=True,
             ):
+                # 邮件服务容易发生瞬时网络失败，短重试可以提高验证码投递成功率。
                 with attempt:
                     await aiosmtplib.send(
                         message,
@@ -92,6 +101,7 @@ _email_service: EmailService | None = None
 
 
 def get_email_service() -> EmailService:
+    """返回进程级单例 EmailService。"""
     global _email_service
     if _email_service is None:
         _email_service = EmailService(get_settings())
