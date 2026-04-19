@@ -9,11 +9,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimeStampMixin, UUIDPrimaryKeyMixin
 
+"""用户健康偏好 ORM 模型。"""
+
 if TYPE_CHECKING:
     from app.models.user import User
 
 
 class UserPreference(UUIDPrimaryKeyMixin, TimeStampMixin, Base):
+    """用户个性化分析偏好。"""
+
     __tablename__ = "user_preferences"
     __table_args__ = ({"extend_existing": True},)
 

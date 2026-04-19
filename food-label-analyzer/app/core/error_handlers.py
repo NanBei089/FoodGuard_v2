@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 from app.core.errors import AppBaseException
 
+"""全局异常处理器，把内部异常转换成统一 API 响应。"""
+
 logger = structlog.get_logger(__name__)
 
 _VALIDATION_FIELD_LABELS = {
@@ -21,10 +23,12 @@ _VALIDATION_FIELD_LABELS = {
 
 
 def _get_request_id(request: Request) -> str | None:
+    """从请求上下文读取链路追踪 ID。"""
     return getattr(request.state, "request_id", None)
 
 
 def _translate_validation_message(field: str, error: dict[str, object]) -> str:
+    """把 Pydantic 的英文校验错误翻译成前端可直接展示的中文文案。"""
     message = str(error.get("msg", "") or "")
     error_type = str(error.get("type", "") or "")
     context = error.get("ctx")
@@ -34,6 +38,7 @@ def _translate_validation_message(field: str, error: dict[str, object]) -> str:
     label = _VALIDATION_FIELD_LABELS.get(field, field or "参数")
     normalized_message = message.lower()
 
+    # 优先处理业务高频字段，避免把 Pydantic 的底层错误直接暴露给用户。
     if error_type == "missing":
         return f"请填写{label}"
 
@@ -80,6 +85,7 @@ def _translate_validation_message(field: str, error: dict[str, object]) -> str:
 
 
 def _format_validation_errors(exc: RequestValidationError) -> list[dict[str, str]]:
+    """格式化字段级参数错误。"""
     formatted: list[dict[str, str]] = []
     for error in exc.errors():
         loc = error.get("loc", ())
@@ -95,6 +101,7 @@ def _format_validation_errors(exc: RequestValidationError) -> list[dict[str, str
 
 
 def _summarize_validation_errors(errors: list[dict[str, str]]) -> str:
+    """把字段错误压缩成接口级 message。"""
     messages: list[str] = []
     for item in errors:
         message = item.get("message", "").strip()
@@ -109,6 +116,7 @@ def _summarize_validation_errors(errors: list[dict[str, str]]) -> str:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    """注册应用级、参数校验和兜底异常处理器。"""
     @app.exception_handler(AppBaseException)
     async def app_base_exception_handler(
         request: Request,
@@ -172,6 +180,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         data = None
         if get_settings().APP_DEBUG:
+            # 调试环境返回异常类型，生产环境隐藏内部错误细节。
             data = {
                 "exception_type": exc.__class__.__name__,
                 "message": str(exc),

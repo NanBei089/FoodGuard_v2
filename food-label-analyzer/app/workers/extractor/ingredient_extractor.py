@@ -13,6 +13,8 @@ from app.workers.extractor.prompts.ingredient_extract import (
     build_ingredient_extract_prompt,
 )
 
+"""配料提取器，优先用规则解析，必要时回退到 LLM。"""
+
 logger = structlog.get_logger(__name__)
 
 TRIGGER_PATTERNS = [
@@ -70,6 +72,7 @@ ADDITION_PATTERN = re.compile(
 
 
 def _get_llm_client() -> OpenAI:
+    """创建 DeepSeek/OpenAI 兼容客户端。"""
     settings = get_settings()
     return OpenAI(
         base_url=settings.DEEPSEEK_BASE_URL,
@@ -80,11 +83,13 @@ def _get_llm_client() -> OpenAI:
 
 
 def _clean_ingredient(text: str) -> str:
+    """清理单个配料项中的含量说明和包裹符号。"""
     cleaned = ADDITION_PATTERN.sub("", text).strip()
     return cleaned.strip("\uff08\uff09\u3010\u3011\u3001\uff0c;\uff1b ")
 
 
 def _deduplicate_keep_order(items: Iterable[str]) -> list[str]:
+    """去重并保持配料原始顺序。"""
     seen: set[str] = set()
     ordered: list[str] = []
     for item in items:
@@ -97,6 +102,7 @@ def _deduplicate_keep_order(items: Iterable[str]) -> list[str]:
 
 
 def _sanitize_source_text(full_raw_text: str) -> str:
+    """去除 HTML、表格和多余空白，得到规则可处理的纯文本。"""
     normalized = html.unescape(full_raw_text or "")
     if not normalized.strip():
         return ""
@@ -111,6 +117,7 @@ def _sanitize_source_text(full_raw_text: str) -> str:
 
 
 def _locate_ingredients_text(full_raw_text: str) -> tuple[str, bool]:
+    """在 OCR 文本中定位配料表片段。"""
     matches = [
         match
         for pattern in TRIGGER_PATTERNS
@@ -132,6 +139,7 @@ def _locate_ingredients_text(full_raw_text: str) -> tuple[str, bool]:
 
 
 def normalize_ingredients_text(full_raw_text: str) -> str:
+    """归一化配料文本，未找到配料锚点时返回清洗后的全文。"""
     sanitized_text = _sanitize_source_text(full_raw_text)
     if not sanitized_text:
         return ""
@@ -143,6 +151,7 @@ def normalize_ingredients_text(full_raw_text: str) -> str:
 
 
 def split_ingredients(text: str) -> list[str]:
+    """按顶层分隔符拆分配料，保留括号内复合成分。"""
     items: list[str] = []
     current: list[str] = []
     depth = 0
@@ -155,6 +164,7 @@ def split_ingredients(text: str) -> list[str]:
             depth = max(0, depth - 1)
             current.append(char)
         elif char in SEPARATORS and depth == 0:
+            # 只在括号外切分，避免把“复配配料（A、B）”拆坏。
             item = "".join(current).strip()
             if item:
                 items.append(item)
@@ -169,6 +179,7 @@ def split_ingredients(text: str) -> list[str]:
 
 
 def expand_compound_ingredients(items: list[str]) -> list[str]:
+    """展开复合配料中的子配料。"""
     expanded: list[str] = []
     for item in items:
         candidate = item.strip()
@@ -194,6 +205,7 @@ def expand_compound_ingredients(items: list[str]) -> list[str]:
 
 
 def _llm_extract(full_raw_text: str) -> list[str]:
+    """使用 LLM 从复杂文本中提取配料列表。"""
     settings = get_settings()
     prompt = build_ingredient_extract_prompt()
     response = _get_llm_client().chat.completions.create(
@@ -215,6 +227,7 @@ def _llm_extract(full_raw_text: str) -> list[str]:
 
 
 def extract(full_raw_text: str) -> tuple[list[str], str]:
+    """提取配料列表和对应的原始片段。"""
     normalized_text = _sanitize_source_text(full_raw_text)
     if not normalized_text:
         return [], ""
@@ -229,6 +242,7 @@ def extract(full_raw_text: str) -> tuple[list[str], str]:
             return expanded, ingredients_text
 
     try:
+        # 规则提取失败时才调用 LLM，降低成本并减少模型不稳定性影响。
         llm_result = _llm_extract(normalized_text)
         if llm_result:
             logger.info("ingredients_extracted_by_llm", count=len(llm_result))

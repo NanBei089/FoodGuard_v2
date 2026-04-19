@@ -15,6 +15,7 @@ import { apiClient } from '@/api/client';
 import { formatReportDate, getScorePalette } from '@/lib/foodguard';
 import type { ApiResponse, PageResponse } from '@/types/api';
 
+/** 报告列表项的前端展示结构。 */
 interface ReportListItem {
   report_id: string;
   task_id: string;
@@ -24,6 +25,7 @@ interface ReportListItem {
   created_at: string;
 }
 
+/** 历史报告页，支持分页、搜索和删除。 */
 export default function History() {
   const navigate = useNavigate();
   const [reports, setReports] = useState<ReportListItem[]>([]);
@@ -35,6 +37,7 @@ export default function History() {
   const [search, setSearch] = useState('');
 
   const fetchReports = async (pageNumber = 1) => {
+    /** 拉取指定页码的历史报告。 */
     try {
       setLoading(true);
       setError('');
@@ -64,6 +67,7 @@ export default function History() {
   }, [page]);
 
   const handleDelete = async (id: string, event: React.MouseEvent) => {
+    /** 删除单条报告，同时阻止点击事件冒泡触发行跳转。 */
     event.preventDefault();
     event.stopPropagation();
 
@@ -88,6 +92,7 @@ export default function History() {
       return true;
     }
 
+    // 当前只做前端轻量搜索，命中摘要和 report_id 即可覆盖大部分找回场景。
     return [report.summary, report.report_id]
       .join(' ')
       .toLowerCase()

@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { ApiResponse } from '@/types/api';
 
+/** 配料分析项。 */
 interface IngredientAnalysisItem {
   name: string;
   risk: 'safe' | 'warning' | 'danger';
@@ -84,6 +85,7 @@ interface ReportDetailData {
 
 type ReportTab = 'ingredients' | 'nutrition' | 'advice';
 
+/** 报告详情页，集中展示评分、配料风险、营养表和人群建议。 */
 export default function ReportDetail() {
   const { id } = useParams<{ id: string }>();
   const [report, setReport] = useState<ReportDetailData | null>(null);
@@ -136,6 +138,7 @@ export default function ReportDetail() {
   const warningCount = ingredients.filter((item) => item.risk === 'warning').length;
   const safeCount = ingredients.filter((item) => item.risk === 'safe').length;
   const primaryHazard = report.analysis?.hazards[0];
+  // 顶部 KPI 卡片使用实时聚合结果，避免页面因为后端字段微调而失去概览能力。
 
   const tabs: Array<{ id: ReportTab; label: string }> = [
     { id: 'ingredients', label: '配料分析' },
@@ -541,6 +544,7 @@ function MetricCard({
   surfaceClass: string;
   valueClass?: string;
 }) {
+  /** 报告顶部的指标卡片。 */
   return (
     <div className={`rounded-2xl border border-slate-100 bg-gradient-to-br p-5 ${surfaceClass}`}>
       <div className="mb-2 flex items-center gap-2">
@@ -566,6 +570,7 @@ function RiskBar({
   total: number;
   colorClass: string;
 }) {
+  /** 展示 safe / warning / danger 占比的横向风险条。 */
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
   return (

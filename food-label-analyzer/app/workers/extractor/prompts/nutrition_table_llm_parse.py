@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+"""营养成分表 LLM 归一化 prompt 模板。"""
+
 
 def build_nutrition_table_llm_parse_prompt() -> str:
+    """构造营养成分表解析提示词。"""
     return """You are a nutrition facts table normalization assistant.
 
 Your task is to convert OCR output from a nutrition facts table into frontend-ready structured JSON.

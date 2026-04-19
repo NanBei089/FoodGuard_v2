@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+"""OCR 文本清洗工具，负责去噪、去重和修复断行。"""
+
 LINEBREAK_RE = re.compile(r"\r\n?|\u2028|\u2029")
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200f\u2060\ufeff]")
@@ -33,6 +35,11 @@ SINGLE_CHAR_KEEP_SET = {"盐", "糖", "油", "水", "醋", "茶"}
 
 
 def clean_ocr_text(raw_text: str, lines: list[Any] | None = None) -> dict[str, Any]:
+    """清洗 OCR 原始文本并生成多种下游输入形态。
+
+    Returns:
+        dict[str, Any]: 包含 clean_text、flat_text 和 clean_lines。
+    """
     if not isinstance(raw_text, str) or not raw_text.strip():
         raise ValueError("输入 JSON 缺少有效 raw_text 文本。")
 
@@ -55,6 +62,7 @@ def clean_ocr_text(raw_text: str, lines: list[Any] | None = None) -> dict[str, A
 
 
 def _collect_line_texts(raw_text: str, lines: list[Any] | None) -> list[str]:
+    """优先使用 OCR 行结构，缺失时退回 raw_text 按行拆分。"""
     if isinstance(lines, list):
         collected: list[str] = []
         for item in lines:
@@ -72,6 +80,7 @@ def _collect_line_texts(raw_text: str, lines: list[Any] | None) -> list[str]:
 
 
 def _normalize_line(text: str) -> str:
+    """清理单行文本中的标记符号和多余空白。"""
     normalized = _normalize_basic(text)
     normalized = MARKDOWN_HEADER_RE.sub("", normalized)
     normalized = MULTI_SPACE_RE.sub(" ", normalized)
@@ -79,6 +88,7 @@ def _normalize_line(text: str) -> str:
 
 
 def _normalize_basic(text: str) -> str:
+    """执行基础字符级归一化。"""
     normalized = LINEBREAK_RE.sub("\n", text)
     normalized = CONTROL_CHAR_RE.sub(" ", normalized)
     normalized = ZERO_WIDTH_RE.sub("", normalized)
@@ -90,6 +100,7 @@ def _normalize_basic(text: str) -> str:
 
 
 def _dedupe_adjacent_lines(lines: list[str]) -> list[str]:
+    """去掉相邻重复行，减少 OCR 重复识别带来的噪声。"""
     deduped: list[str] = []
     previous_canonical = ""
 
@@ -105,12 +116,14 @@ def _dedupe_adjacent_lines(lines: list[str]) -> list[str]:
 
 
 def _canonicalize_line(text: str) -> str:
+    """把行文本规整成适合比较的形式。"""
     canonical = CANONICAL_SPACE_RE.sub("", text)
     canonical = CANONICAL_PUNCT_RE.sub("", canonical)
     return canonical.strip().lower()
 
 
 def _merge_broken_lines(lines: list[str]) -> list[str]:
+    """合并被 OCR 错切开的标签行。"""
     merged: list[str] = []
     index = 0
 
@@ -131,6 +144,7 @@ def _merge_broken_lines(lines: list[str]) -> list[str]:
 
 
 def _should_merge(current: str, next_line: str) -> bool:
+    """判断两行是否应该被合并。"""
     current_compact = CANONICAL_SPACE_RE.sub("", current)
     next_compact = CANONICAL_SPACE_RE.sub("", next_line)
 
@@ -149,6 +163,7 @@ def _should_merge(current: str, next_line: str) -> bool:
         and not current_anchor_match
         and not next_anchor_match
     ):
+        # 有些关键词会被 OCR 拆成两行，合并后才能被后续 topic 规则识别。
         return True
 
     if current.endswith((":", "：")):

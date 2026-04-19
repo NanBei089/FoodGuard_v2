@@ -13,6 +13,8 @@ from app.services.preference_service import (
     upsert_user_preferences,
 )
 
+"""用户个性化饮食偏好 API。"""
+
 router = APIRouter()
 
 
@@ -25,6 +27,7 @@ async def get_me_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserPreferenceResponse]:
+    """读取当前用户的偏好配置。"""
     payload = await get_user_preferences(current_user, db)
     return success_response(payload)
 
@@ -39,6 +42,7 @@ async def put_me_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserPreferenceResponse]:
+    """覆盖保存当前用户的偏好配置。"""
     payload = await upsert_user_preferences(
         current_user,
         focus_groups=request.focus_groups,

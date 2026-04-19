@@ -15,6 +15,8 @@ from PIL import Image
 from app.core.config import get_settings
 from app.core.errors import OCRServiceError
 
+"""OCR Worker，负责在线 OCR 调用、结果清洗与表格结构化。"""
+
 logger = structlog.get_logger(__name__)
 
 _ENGINE_CACHE: dict[str, "PaddleOCRAPIClient"] = {}
@@ -23,6 +25,8 @@ _engine_lock = threading.Lock()
 
 @dataclass(frozen=True)
 class OCRConfig:
+    """OCR Runtime 请求配置。"""
+
     job_url: str
     token: str
     model: str = "PaddleOCR-VL-1.5"
@@ -57,6 +61,8 @@ class OCRConfig:
 
 
 class OCRTextResult:
+    """全文 OCR 结果对象。"""
+
     def __init__(
         self,
         raw_text: str = "",
@@ -72,6 +78,7 @@ class OCRTextResult:
         self.artifact_json_url = artifact_json_url
 
     def model_dump(self) -> dict[str, Any]:
+        """导出为可序列化字典。"""
         return {
             "raw_text": self.raw_text,
             "lines": self.lines,
@@ -82,6 +89,8 @@ class OCRTextResult:
 
 
 class TableRecognitionResult:
+    """营养表识别结果对象。"""
+
     def __init__(
         self,
         table_json: dict[str, Any] | None = None,
@@ -97,6 +106,7 @@ class TableRecognitionResult:
         self.source = source
 
     def model_dump(self) -> dict[str, Any]:
+        """导出为可序列化字典。"""
         return {
             "table_json": self.table_json,
             "table_html_url": self.table_html_url,
@@ -107,6 +117,8 @@ class TableRecognitionResult:
 
 
 class PaddleOCRAPIClient:
+    """PaddleOCR 在线任务接口封装。"""
+
     def __init__(self, config: OCRConfig) -> None:
         self.config = config
         if not config.job_url.strip():
@@ -117,6 +129,7 @@ class PaddleOCRAPIClient:
             raise RuntimeError("PaddleOCR 在线 MODEL 未配置。")
 
     def describe(self) -> dict[str, Any]:
+        """返回当前客户端的关键能力描述。"""
         return {
             "lang": self.config.lang,
             "use_angle_cls": self.config.use_angle_cls,
@@ -126,9 +139,11 @@ class PaddleOCRAPIClient:
         }
 
     def _headers(self) -> dict[str, str]:
+        """构造鉴权请求头。"""
         return {"Authorization": f"bearer {self.config.token}"}
 
     def _build_optional_payload(self) -> dict[str, Any]:
+        """把 OCR 高级选项转换为远端接口需要的 payload。"""
         return {
             "useDocOrientationClassify": bool(self.config.use_doc_orientation_classify),
             "useDocUnwarping": bool(self.config.use_doc_unwarping),
@@ -149,6 +164,7 @@ class PaddleOCRAPIClient:
         }
 
     def _submit_job(self, image_bytes: bytes, filename: str = "image.jpg") -> str:
+        """提交 OCR 任务并返回 job_id。"""
         data = {
             "model": self.config.model,
             "optionalPayload": json.dumps(
@@ -180,6 +196,7 @@ class PaddleOCRAPIClient:
             raise RuntimeError(f"提交 OCR 任务成功但响应缺少 jobId: {payload}") from exc
 
     def _poll_job(self, job_id: str) -> dict[str, Any]:
+        """轮询 OCR 任务直到完成或超时。"""
         job_status_url = f"{self.config.job_url}/{job_id}"
         deadline = time.monotonic() + self.config.poll_timeout_s
 
@@ -217,6 +234,7 @@ class PaddleOCRAPIClient:
         )
 
     def _download_jsonl_results(self, json_url: str) -> list[Any]:
+        """下载并解析 OCR 结果 JSONL。"""
         response = requests.get(json_url, timeout=self.config.request_timeout_s)
         response.raise_for_status()
 
@@ -237,6 +255,7 @@ class PaddleOCRAPIClient:
         return results
 
     def ocr(self, image_bytes: bytes, filename: str = "image.jpg") -> dict[str, Any]:
+        """执行一次完整的 OCR 远端调用流程。"""
         job_id = self._submit_job(image_bytes, filename)
         job_data = self._poll_job(job_id)
         result_url = job_data.get("resultUrl") or {}
@@ -256,6 +275,7 @@ PaddleOCR = PaddleOCRAPIClient
 
 
 def _ensure_file(path: str | Path) -> Path:
+    """确保本地文件路径存在。"""
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"图片文件不存在: {file_path}")
@@ -270,6 +290,7 @@ def _prepare_image_for_remote_ocr(
     max_side: int = 2200,
     jpeg_quality: int = 86,
 ) -> bytes:
+    """在上传前压缩并规范化图片，控制远端 OCR 输入大小。"""
     try:
         image = Image.open(BytesIO(image_bytes)).convert("RGB")
     except Exception:
@@ -397,6 +418,7 @@ def _extract_from_layout_results(layout_results: list[Any]) -> list[dict[str, An
 
 
 def extract_text_lines(ocr_result: Any) -> list[dict[str, Any]]:
+    """从 OCR 原始响应中抽取统一的文本行结构。"""
     if ocr_result is None:
         return []
 
@@ -567,6 +589,7 @@ def warmup() -> None:
 
 
 def recognize_full_text(image_bytes: bytes) -> OCRTextResult:
+    """执行整图 OCR，返回文本行与原始文本。"""
     engine = _get_ocr_engine()
     try:
         prepared_bytes = _prepare_image_for_remote_ocr(image_bytes)
@@ -662,6 +685,7 @@ def _convert_table_to_nutrition_json(rows: list[list[str]]) -> dict[str, Any] | 
 
 
 def recognize_nutrition_table(image_bytes: bytes) -> TableRecognitionResult:
+    """执行营养表识别并尽量还原结构化表格。"""
     engine = _get_nutrition_ocr_engine()
     try:
         prepared_bytes = _prepare_image_for_remote_ocr(image_bytes)
@@ -721,11 +745,14 @@ def recognize_nutrition_table(image_bytes: bytes) -> TableRecognitionResult:
 
 @dataclass
 class OCRParallelResult:
+    """并行 OCR 的组合结果。"""
+
     full_text: OCRTextResult
     nutrition_table: TableRecognitionResult
 
 
 def _run_single_ocr(image_bytes: bytes, config: OCRConfig) -> dict[str, Any]:
+    """提交并等待单个 OCR 任务完成。"""
     client = PaddleOCRAPIClient(config)
     job_id = client._submit_job(image_bytes)
     job_data = client._poll_job(job_id)
@@ -740,10 +767,12 @@ def recognize_parallel(
     full_text_image_bytes: bytes,
     nutrition_image_bytes: bytes | None = None,
 ) -> OCRParallelResult:
+    """并行执行全文 OCR 与营养表 OCR。"""
     full_text_config = _get_ocr_engine().config
     nutrition_config = _get_nutrition_ocr_engine().config
     if nutrition_image_bytes is None:
         nutrition_image_bytes = full_text_image_bytes
+    # 在任务提交前统一做图片预处理，可以显著降低大图上传耗时和 OCR 接口报错率。
     prepared_full_text_image_bytes = _prepare_image_for_remote_ocr(full_text_image_bytes)
     prepared_nutrition_image_bytes = _prepare_image_for_remote_ocr(
         nutrition_image_bytes
@@ -823,6 +852,7 @@ def _run_parallel_jobs(
     full_text_config: OCRConfig,
     nutrition_config: OCRConfig,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """用线程池并发轮询两个 OCR 任务，减少端到端等待时间。"""
     import concurrent.futures
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:

@@ -18,12 +18,15 @@ from app.workers.extractor.rule_config import (
     TOPIC_TRIM_EDGE_RE,
 )
 
+"""食品标签主题切分工具，用于从清洗后的 OCR 文本中定位配料和其他字段。"""
+
 
 def extract_ingredient_topic(
     clean_text: str,
     flat_text: str,
     clean_lines: list[str] | None = None,
 ) -> dict[str, Any]:
+    """提取配料主题文本。"""
     if not isinstance(clean_text, str) or not isinstance(flat_text, str):
         raise ValueError(
             "extract_ingredient_topic 需要 clean_text 与 flat_text 字符串输入。"
@@ -38,6 +41,7 @@ def extract_ingredient_topic(
         if not match:
             continue
         if "营养" in line and NUTRITION_HEADER_RE.search(line[: match.end() + 4]):
+            # “营养成分表”中也可能出现“成分”字样，这里避免误当成配料表起点。
             continue
 
         start_anchor = _normalize_anchor(match.group("anchor"))
@@ -90,6 +94,7 @@ def extract_other_topics(
     clean_text: str,
     clean_lines: list[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    """提取生产商、保质期、执行标准等非配料主题。"""
     if not isinstance(clean_text, str):
         raise ValueError("extract_other_topics 需要 clean_text 字符串输入。")
 
@@ -111,6 +116,7 @@ def extract_other_topics(
 
 
 def _prepare_lines(clean_text: str, clean_lines: list[str] | None) -> list[str]:
+    """准备规则匹配使用的非空行。"""
     source_lines = (
         clean_lines if isinstance(clean_lines, list) else clean_text.splitlines()
     )
@@ -127,6 +133,7 @@ def _prepare_lines(clean_text: str, clean_lines: list[str] | None) -> list[str]:
 def _extract_single_line_topic(
     lines: list[str], pattern: re.Pattern[str]
 ) -> dict[str, Any]:
+    """提取单行即可表达的主题。"""
     for line in lines:
         if _is_noise_line(line):
             continue
@@ -137,6 +144,7 @@ def _extract_single_line_topic(
 
 
 def _extract_manufacturer_topic(lines: list[str]) -> dict[str, Any]:
+    """提取可能跨行的生产商/厂址信息。"""
     fragments: list[str] = []
     started = False
 
@@ -157,6 +165,7 @@ def _extract_manufacturer_topic(lines: list[str]) -> dict[str, Any]:
 
 
 def _trim_ingredient_fragment(text: str) -> tuple[str, str]:
+    """裁剪配料片段，并返回命中的结束锚点。"""
     normalized = _normalize_text(text)
     if not normalized:
         return "", ""
@@ -171,6 +180,7 @@ def _trim_ingredient_fragment(text: str) -> tuple[str, str]:
 
 
 def _ingredient_boundary_anchor(line: str) -> str:
+    """判断当前行是否已经进入下一个主题。"""
     if _is_noise_line(line):
         return ""
 
@@ -181,6 +191,7 @@ def _ingredient_boundary_anchor(line: str) -> str:
 
 
 def _join_fragments(fragments: list[str], separator: str) -> str:
+    """拼接多个主题片段。"""
     non_empty = [fragment for fragment in fragments if fragment]
     if not non_empty:
         return ""
@@ -188,16 +199,19 @@ def _join_fragments(fragments: list[str], separator: str) -> str:
 
 
 def _normalize_text(text: str) -> str:
+    """清理主题文本边界符号。"""
     normalized = SPACE_RE.sub(" ", text).strip()
     normalized = TOPIC_TRIM_EDGE_RE.sub("", normalized)
     return normalized.strip()
 
 
 def _normalize_anchor(anchor: str) -> str:
+    """归一化主题锚点。"""
     return SPACE_RE.sub("", anchor).strip()
 
 
 def _is_noise_line(line: str) -> bool:
+    """判断当前行是否是可忽略噪声。"""
     return bool(NOISE_LINE_RE.fullmatch(line.strip()))
 
 

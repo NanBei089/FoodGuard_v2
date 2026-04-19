@@ -9,8 +9,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 from app.models.enums import VerificationType
 
+"""邮箱验证码 ORM 模型。"""
+
 
 class EmailVerification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """注册或密码重置流程中使用的邮箱验证码。"""
+
     __tablename__ = "email_verifications"
     __table_args__ = (
         Index("idx_email_verifications_email_type", "email", "type"),

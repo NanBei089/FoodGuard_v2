@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth';
 import type { ApiResponse } from '@/types/api';
 import type { TokenResponse } from '@/types/auth';
 
+/** 注册页，负责验证码发送、字段级错误映射和注册后自动登录。 */
 export default function Register() {
   const navigate = useNavigate();
   const setSession = useAuthStore((state) => state.setSession);
@@ -28,11 +29,13 @@ export default function Register() {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<string, string>>>({});
 
   const clearErrors = () => {
+    /** 清空页面级和字段级错误。 */
     setError('');
     setFieldErrors({});
   };
 
   const clearFieldError = (field: string) => {
+    /** 当用户继续编辑字段时，只移除该字段对应的错误提示。 */
     setError('');
     setFieldErrors((current) => {
       if (!current[field]) {
@@ -46,6 +49,7 @@ export default function Register() {
   };
 
   const inferFieldFromMessage = (message: string) => {
+    /** 从后端消息中推断对应字段，提升非结构化错误的可用性。 */
     if (message.includes('验证码')) {
       return 'code';
     }
@@ -59,6 +63,7 @@ export default function Register() {
   };
 
   const applyApiError = (payload: unknown, fallbackMessage: string, fallbackField?: string) => {
+    /** 把接口错误统一投影为页面级提示和字段级提示。 */
     const nextError = extractApiErrorDetails(payload, fallbackMessage);
     const inferredField = fallbackField || inferFieldFromMessage(nextError.message);
 
@@ -82,10 +87,12 @@ export default function Register() {
       setCooldown((current) => current - 1);
     }, 1000);
 
+    // 用单次 timeout 递减 cooldown，比 interval 更容易在卸载时保证清理干净。
     return () => window.clearTimeout(timer);
   }, [cooldown]);
 
   const handleSendCode = async () => {
+    /** 发送注册验证码。 */
     if (!email.trim()) {
       setError('请先输入邮箱');
       setFieldErrors({ email: '请先输入邮箱' });
@@ -112,6 +119,7 @@ export default function Register() {
   };
 
   const handleRegister = async (event: React.FormEvent) => {
+    /** 提交注册表单，并在注册成功后自动完成登录。 */
     event.preventDefault();
     clearErrors();
 

@@ -12,6 +12,8 @@ from minio.error import S3Error
 from app.core.config import get_settings
 from app.core.errors import StorageServiceError
 
+"""对象存储服务，负责图片与分析产物的上传、删除和签名访问。"""
+
 logger = structlog.get_logger(__name__)
 
 _CONTENT_TYPE_EXTENSIONS = {
@@ -22,6 +24,8 @@ _CONTENT_TYPE_EXTENSIONS = {
 
 
 class StorageService:
+    """MinIO 封装，屏蔽 bucket 初始化和错误映射细节。"""
+
     def __init__(self) -> None:
         settings = get_settings()
         self._bucket_name = settings.MINIO_BUCKET_NAME
@@ -34,6 +38,11 @@ class StorageService:
         )
 
     async def ensure_bucket(self) -> None:
+        """确保 bucket 已可用。
+
+        Returns:
+            None: 初始化成功后会缓存 bucket_ready 状态。
+        """
         if self._bucket_ready:
             return
         try:
@@ -55,6 +64,7 @@ class StorageService:
         user_id: str,
         content_type: str,
     ) -> tuple[str, str]:
+        """上传原始图片并返回对象键与签名 URL。"""
         extension = _CONTENT_TYPE_EXTENSIONS.get(content_type)
         if extension is None:
             raise StorageServiceError("Unsupported image content type")
@@ -79,6 +89,7 @@ class StorageService:
     async def upload_artifact(
         self, data: bytes, object_key: str, content_type: str
     ) -> str:
+        """上传 OCR/表格等中间产物。"""
         await self.ensure_bucket()
         try:
             await asyncio.to_thread(
@@ -94,6 +105,7 @@ class StorageService:
             raise self._raise_storage_error("Failed to upload artifact", exc)
 
     async def get_presigned_url(self, image_key: str, expires: int = 3600) -> str:
+        """生成临时可访问的签名 URL。"""
         try:
             return await asyncio.to_thread(
                 self._client.get_presigned_url,
@@ -106,6 +118,7 @@ class StorageService:
             raise self._raise_storage_error("Failed to create presigned URL", exc)
 
     async def delete_image(self, image_key: str) -> None:
+        """删除对象存储中的图片。"""
         try:
             await asyncio.to_thread(
                 self._client.remove_object, self._bucket_name, image_key
@@ -115,6 +128,7 @@ class StorageService:
             raise self._raise_storage_error("Failed to delete image", exc)
 
     def _build_object_key(self, user_id: str, extension: str) -> str:
+        """按用户和日期分层构造对象键，降低目录热点并便于排查。"""
         now = datetime.now(timezone.utc)
         return (
             f"uploads/{user_id}/{now.year:04d}/{now.month:02d}/{now.day:02d}/"
@@ -122,6 +136,7 @@ class StorageService:
         )
 
     def _raise_storage_error(self, message: str, exc: Exception) -> StorageServiceError:
+        """统一记录存储异常并转换为业务层错误。"""
         logger.error(
             "storage_operation_failed",
             message=message,
@@ -137,6 +152,7 @@ _storage_service: StorageService | None = None
 
 
 def get_storage_service() -> StorageService:
+    """返回进程级单例 StorageService。"""
     global _storage_service
     if _storage_service is None:
         _storage_service = StorageService()

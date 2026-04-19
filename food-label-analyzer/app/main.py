@@ -25,6 +25,8 @@ from app.db.session import get_engine
 from app.schemas.common import ApiResponse, success_response
 from app.schemas.health import HealthCheckResponse, HealthServicesSchema
 
+"""应用启动、健康检查与全局中间件配置。"""
+
 APP_VERSION = "1.0.0"
 HEALTH_TIMEOUT_SECONDS = 2
 
@@ -33,6 +35,14 @@ logger = structlog.get_logger(__name__)
 
 
 def _redact_url(url: str) -> str:
+    """对连接串中的认证信息做脱敏，避免日志泄漏敏感凭据。
+
+    Params:
+        url: 原始连接串。
+
+    Returns:
+        str: 去除用户名/密码明文后的 URL。
+    """
     parsed = urlsplit(url)
     if not parsed.username and not parsed.password:
         return url
@@ -51,6 +61,14 @@ def _redact_url(url: str) -> str:
 
 
 def _build_config_summary(current_settings: Settings) -> dict[str, str | bool]:
+    """构造用于启动日志的配置摘要。
+
+    Params:
+        current_settings: 当前生效的应用配置对象。
+
+    Returns:
+        dict[str, str | bool]: 已脱敏的关键配置字段。
+    """
     return {
         "app_env": current_settings.APP_ENV,
         "app_debug": current_settings.APP_DEBUG,
@@ -67,6 +85,11 @@ def _build_config_summary(current_settings: Settings) -> dict[str, str | bool]:
 
 
 def _create_minio_client() -> Minio:
+    """创建 MinIO 客户端。
+
+    Returns:
+        Minio: 已按当前配置初始化的对象存储客户端。
+    """
     current_settings = get_settings()
     return Minio(
         endpoint=current_settings.minio_client_endpoint,
@@ -77,6 +100,11 @@ def _create_minio_client() -> Minio:
 
 
 async def _check_database_connection() -> None:
+    """执行数据库连通性探测。
+
+    Returns:
+        None: 仅在探测失败时抛出异常。
+    """
     engine = get_engine()
     async with engine.connect() as connection:
         await connection.execute(text("SELECT 1"))
@@ -84,14 +112,25 @@ async def _check_database_connection() -> None:
 
 
 async def _check_redis_connection() -> None:
+    """执行 Redis 连通性探测。
+
+    Returns:
+        None: 仅在探测失败时抛出异常。
+    """
     redis_client = await get_redis()
     await redis_client.ping()
     logger.info("redis_connection_ok")
 
 
 async def _ensure_minio_bucket() -> None:
+    """确保业务 bucket 已存在，缺失时自动创建。
+
+    Returns:
+        None: 仅在对象存储不可用时抛出异常。
+    """
     current_settings = get_settings()
     client = _create_minio_client()
+    # MinIO SDK 是同步接口，这里切到线程池以避免阻塞启动事件循环。
     bucket_exists = await asyncio.to_thread(
         client.bucket_exists, current_settings.MINIO_BUCKET_NAME
     )
@@ -104,6 +143,7 @@ async def _ensure_minio_bucket() -> None:
 
 
 def _check_yolo_model_file() -> None:
+    """检查 YOLO 模型文件路径是否可用。"""
     model_path = Path(get_settings().YOLO_MODEL_PATH)
     if model_path.exists():
         logger.info("yolo_model_exists", path=str(model_path))
@@ -112,6 +152,7 @@ def _check_yolo_model_file() -> None:
 
 
 def _check_chromadb_directory() -> None:
+    """检查 ChromaDB 本地目录是否存在。"""
     chroma_path = Path(get_settings().CHROMADB_PATH)
     if chroma_path.exists():
         logger.info("chromadb_path_exists", path=str(chroma_path))
@@ -120,6 +161,7 @@ def _check_chromadb_directory() -> None:
 
 
 async def _run_startup_checks() -> None:
+    """串行执行启动期基础依赖检查。"""
     await _check_database_connection()
     await _check_redis_connection()
     await _ensure_minio_bucket()
@@ -128,6 +170,15 @@ async def _run_startup_checks() -> None:
 
 
 async def _run_with_timeout(check_name: str, probe) -> str:
+    """在统一超时窗口内运行健康检查探针。
+
+    Params:
+        check_name: 服务名称，用于日志打点。
+        probe: 实际执行探测的异步函数。
+
+    Returns:
+        str: `"up"` 表示正常，`"down"` 表示失败或超时。
+    """
     try:
         await asyncio.wait_for(probe(), timeout=HEALTH_TIMEOUT_SECONDS)
         return "up"
@@ -137,14 +188,17 @@ async def _run_with_timeout(check_name: str, probe) -> str:
 
 
 async def _probe_database() -> None:
+    """数据库健康检查探针。"""
     await _check_database_connection()
 
 
 async def _probe_redis() -> None:
+    """Redis 健康检查探针。"""
     await _check_redis_connection()
 
 
 async def _probe_minio() -> None:
+    """MinIO 健康检查探针。"""
     current_settings = get_settings()
     await asyncio.to_thread(
         _create_minio_client().bucket_exists, current_settings.MINIO_BUCKET_NAME
@@ -152,11 +206,13 @@ async def _probe_minio() -> None:
 
 
 async def _probe_yolo_model() -> None:
+    """YOLO 模型文件健康检查探针。"""
     if not Path(get_settings().YOLO_MODEL_PATH).exists():
         raise FileNotFoundError(get_settings().YOLO_MODEL_PATH)
 
 
 async def _probe_chromadb() -> None:
+    """ChromaDB 健康检查探针。"""
     current_settings = get_settings()
     client = chromadb.PersistentClient(path=current_settings.CHROMADB_PATH)
     collection = client.get_collection(
@@ -168,6 +224,7 @@ async def _probe_chromadb() -> None:
 
 
 async def _probe_ollama_embedding() -> None:
+    """Ollama embedding 服务健康检查探针。"""
     current_settings = get_settings()
     if not current_settings.HEALTH_CHECK_EXTERNAL:
         return
@@ -179,6 +236,7 @@ async def _probe_ollama_embedding() -> None:
 
 
 async def _probe_ocr_runtime() -> None:
+    """OCR Runtime 健康检查探针。"""
     current_settings = get_settings()
     if not current_settings.HEALTH_CHECK_EXTERNAL:
         return
@@ -202,6 +260,11 @@ async def _probe_ocr_runtime() -> None:
 
 
 async def _build_health_payload() -> HealthCheckResponse:
+    """聚合所有依赖状态并构造 `/health` 响应。
+
+    Returns:
+        HealthCheckResponse: 面向外部监控与前端展示的健康状态快照。
+    """
     services = HealthServicesSchema(
         database=await _run_with_timeout("database", _probe_database),
         redis=await _run_with_timeout("redis", _probe_redis),
@@ -227,6 +290,7 @@ async def _build_health_payload() -> HealthCheckResponse:
 
 
 def _is_https_request(request: Request) -> bool:
+    """判断请求是否经过 HTTPS。"""
     if request.url.scheme == "https":
         return True
     return request.headers.get("x-forwarded-proto", "").lower() == "https"
@@ -234,6 +298,7 @@ def _is_https_request(request: Request) -> bool:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """定义应用生命周期钩子，在启动和关闭阶段统一管理资源。"""
     setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
     logger.info("application_config_summary", **_build_config_summary(settings))
 
@@ -272,6 +337,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
+    """为每个请求注入 request_id，便于串联链路日志。"""
     request_id = request.headers.get("X-Request-ID") or uuid4().hex
     request.state.request_id = request_id
     structlog.contextvars.clear_contextvars()
@@ -286,10 +352,12 @@ async def request_id_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
+    """追加统一安全响应头，减少浏览器侧常见攻击面。"""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
+    # HSTS 只在 HTTPS 请求下开启，避免本地 HTTP 开发环境出现错误跳转。
     if _is_https_request(request):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
@@ -309,6 +377,7 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
     responses={200: {"description": "健康检查结果"}},
 )
 async def health() -> ApiResponse[HealthCheckResponse]:
+    """返回聚合后的服务健康状态。"""
     return success_response(await _build_health_payload(), message="健康检查完成")
 
 

@@ -10,12 +10,15 @@ import structlog
 from app.core.config import get_settings
 from app.core.errors import EmbeddingServiceError
 
+"""RAG Worker，负责 embedding、Chroma 查询与配料命中聚合。"""
+
 logger = structlog.get_logger(__name__)
 _HTTP_CLIENT: httpx.Client | None = None
 _http_client_lock = None
 
 
 def _get_http_client() -> httpx.Client:
+    """延迟初始化共享 HTTP 客户端，避免重复建连。"""
     global _HTTP_CLIENT, _http_client_lock
     if _http_client_lock is None:
         import threading
@@ -33,6 +36,7 @@ def _get_http_client() -> httpx.Client:
 
 
 def _normalize_text(value: Any) -> str:
+    """统一做 Unicode 归一化与空白压缩。"""
     import unicodedata
 
     text = "" if value is None else str(value)
@@ -42,6 +46,7 @@ def _normalize_text(value: Any) -> str:
 
 
 def _embed(text: str) -> list[float]:
+    """调用 Ollama embedding 接口生成向量。"""
     clean_text = _normalize_text(text)
     if not clean_text:
         raise EmbeddingServiceError("Embedding input is empty")
@@ -85,14 +90,17 @@ def _embed(text: str) -> list[float]:
 
 
 def _embed_text(text: str) -> list[float]:
+    """`_embed` 的语义别名，保留给调用方使用。"""
     return _embed(text)
 
 
 def _normalize_term(term: str) -> str:
+    """归一化单个检索词。"""
     return _normalize_text(term)
 
 
 def _similarity_from_distance(distance: Any) -> float:
+    """把向量距离转换为 0-1 相似度分数。"""
     try:
         score = 1.0 - float(distance)
     except (TypeError, ValueError):
@@ -101,6 +109,7 @@ def _similarity_from_distance(distance: Any) -> float:
 
 
 def _coerce_aliases(value: Any) -> list[str]:
+    """把 metadata 中的 aliases 转为统一数组。"""
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     if isinstance(value, str) and value.strip():
@@ -109,6 +118,7 @@ def _coerce_aliases(value: Any) -> list[str]:
 
 
 def _extract_match_term(meta: dict[str, Any], fallback: str) -> str:
+    """尽量从 metadata 中恢复配料原始名。"""
     for key in ("term", "name", "ingredient", "raw_term"):
         value = meta.get(key)
         if isinstance(value, str) and value.strip():
@@ -117,6 +127,7 @@ def _extract_match_term(meta: dict[str, Any], fallback: str) -> str:
 
 
 def _extract_function_category(meta: dict[str, Any]) -> str:
+    """从 metadata 中提取功能分类。"""
     for key in ("function_category", "category", "function", "type"):
         value = meta.get(key)
         if isinstance(value, str) and value.strip():
@@ -125,6 +136,7 @@ def _extract_function_category(meta: dict[str, Any]) -> str:
 
 
 def _build_rag_match(item: dict[str, Any], term: str, index: int) -> dict[str, Any]:
+    """把 Chroma 原始结果转换成前端和 LLM 共用的匹配结构。"""
     meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
     normalized_term = _normalize_term(term)
     return {
@@ -143,6 +155,7 @@ def _build_rag_match(item: dict[str, Any], term: str, index: int) -> dict[str, A
 
 
 def _match_quality(matches: list[dict[str, Any]]) -> str:
+    """按最高相似度把命中质量简化为 high/weak/empty。"""
     if not matches:
         return "empty"
     best_score = matches[0]["similarity_score"]
@@ -152,24 +165,28 @@ def _match_quality(matches: list[dict[str, Any]]) -> str:
 
 
 def _get_chroma_client() -> chromadb.Client:
+    """创建持久化 Chroma 客户端。"""
     settings = get_settings()
     chroma_data_path = settings.CHROMADB_PATH
     return chromadb.PersistentClient(path=str(chroma_data_path))
 
 
 def _get_ingredients_collection() -> chromadb.Collection:
+    """获取配料知识库集合。"""
     settings = get_settings()
     client = _get_chroma_client()
     return client.get_collection(name=settings.CHROMADB_COLLECTION_INGREDIENTS)
 
 
 def _get_standards_collection() -> chromadb.Collection:
+    """获取标准法规知识库集合。"""
     settings = get_settings()
     client = _get_chroma_client()
     return client.get_collection(name=settings.CHROMADB_COLLECTION_STANDARDS)
 
 
 def warmup() -> None:
+    """预热集合句柄与 embedding 服务。"""
     _get_ingredients_collection()
     _get_standards_collection()
     current_settings = get_settings()
@@ -182,6 +199,7 @@ def warmup() -> None:
 
 
 def retrieve_all_ingredients(query_text: str, top_k: int = 5) -> list[dict[str, Any]]:
+    """检索配料知识库。"""
     if not query_text or not query_text.strip():
         return []
 
@@ -224,6 +242,7 @@ def retrieve_all_ingredients(query_text: str, top_k: int = 5) -> list[dict[str, 
 
 
 def query_gb2760_by_keyword(keyword: str, top_k: int = 3) -> list[dict[str, Any]]:
+    """检索标准法规知识库。"""
     if not keyword or not keyword.strip():
         return []
 
@@ -271,6 +290,7 @@ def retrieve_all(
     top_k_ingredients: int = 5,
     top_k_per_term: int = 2,
 ) -> dict[str, Any]:
+    """对配料列表执行批量检索，并输出聚合结果。"""
     if not ingredient_terms and not ingredients_text:
         return {
             "source_file": "chromadb",
@@ -304,6 +324,7 @@ def retrieve_all(
         )
 
     if not retrieval_items and ingredients_text.strip():
+        # 当配料拆分失败时，退回整段文本检索，至少保留一条可追溯的召回结果。
         fallback_term = _normalize_term(ingredients_text)
         fallback_matches = retrieve_all_ingredients(
             fallback_term, top_k=top_k_ingredients
@@ -334,6 +355,7 @@ def check_additive_safety(
     additive_name: str,
     food_category: str | None = None,
 ) -> dict[str, Any]:
+    """按添加剂名称快速查询安全性线索。"""
     retrieved = retrieve_all_ingredients(query_text=additive_name, top_k=3)
 
     if not retrieved:

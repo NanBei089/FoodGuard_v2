@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth';
 import type { ApiResponse } from '@/types/api';
 import type { User, UserPreferences } from '@/types/auth';
 
+/** 首次引导页的人群选项。 */
 const focusGroupOptions = [
   { id: 'adult', emoji: '🧑', label: '自己 / 成年人' },
   { id: 'child', emoji: '🧒', label: '儿童' },
@@ -22,6 +23,7 @@ const healthConditionOptions = [
   { id: 'hyperuricemia', label: '高尿酸 / 痛风' },
 ];
 
+/** 首次引导页，用于补齐昵称和个性化健康偏好。 */
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, preferences, setSession } = useAuthStore();
@@ -41,6 +43,7 @@ export default function Onboarding() {
   const hasAllergyCondition = form.health_conditions.includes('allergy');
 
   const toggleArrayItem = (key: 'focus_groups' | 'health_conditions', value: string) => {
+    /** 切换多选项。 */
     setForm((current) => {
       const currentItems = current[key];
       return {
@@ -53,6 +56,7 @@ export default function Onboarding() {
   };
 
   const toggleAllergyCondition = () => {
+    /** 过敏条件和过敏原输入联动，避免出现有过敏原但未标记 allergy 的状态。 */
     setForm((current) => {
       const nextConditions = current.health_conditions.includes('allergy')
         ? current.health_conditions.filter((item) => item !== 'allergy')
@@ -67,6 +71,7 @@ export default function Onboarding() {
   };
 
   const addAllergy = () => {
+    /** 追加一个过敏原标签。 */
     const value = allergyInput.trim();
     if (!value || form.allergies.includes(value)) {
       return;
@@ -83,6 +88,7 @@ export default function Onboarding() {
   };
 
   const removeAllergy = (item: string) => {
+    /** 删除一个过敏原标签。 */
     setForm((current) => ({
       ...current,
       allergies: current.allergies.filter((entry) => entry !== item),
@@ -90,6 +96,7 @@ export default function Onboarding() {
   };
 
   const handleSubmit = async () => {
+    /** 并行保存昵称和偏好，完成 onboarding。 */
     const normalizedDisplayName = displayName.trim();
     if (!normalizedDisplayName) {
       setError('请先填写昵称');

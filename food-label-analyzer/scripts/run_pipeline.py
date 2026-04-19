@@ -13,10 +13,13 @@ from app.services.score_calculator import calculate_health_score, format_score_b
 from app.workers import llm_worker, ocr_worker, rag_worker, yolo_worker
 from app.workers.extractor import ingredient_extractor, nutrition_extractor
 
+"""本地全链路调试脚本：不落库，仅验证图片分析流程是否能跑通。"""
+
 settings = get_settings()
 
 
 def _pick_image() -> Path:
+    """从仓库 images 目录选择一张示例图片。"""
     images_dir = REPO_ROOT / "images"
     files = sorted(images_dir.glob("*.jpg"))
     if not files:
@@ -25,6 +28,7 @@ def _pick_image() -> Path:
 
 
 def run_full_pipeline() -> bool:
+    """执行一次不落库的食品标签分析流程。"""
     print("=" * 60)
     print("食品标签分析全链路测试（不落库）")
     print("=" * 60)
@@ -98,8 +102,11 @@ def run_full_pipeline() -> bool:
 
         print("\n6. RAG检索...")
         try:
+            # 调试脚本只取前若干配料，避免一次本地验证消耗过多 embedding 请求。
             ingredients_query = ", ".join(ingredient_terms[:10])
-            rag_ingredients = rag_worker.retrieve_all_ingredients(ingredients_query, top_k=settings.RAG_TOP_K_INGREDIENTS)
+            rag_ingredients = rag_worker.retrieve_all_ingredients(
+                ingredients_query, top_k=settings.RAG_TOP_K_INGREDIENTS
+            )
             rag_standards = []
             for term in ingredient_terms[:5]:
                 standards = rag_worker.query_gb2760_by_keyword(term, top_k=2)
@@ -166,4 +173,3 @@ def run_full_pipeline() -> bool:
 
 if __name__ == "__main__":
     run_full_pipeline()
-

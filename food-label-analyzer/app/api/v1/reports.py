@@ -16,6 +16,8 @@ from app.services.report_service import (
     get_report_list,
 )
 
+"""历史分析报告相关 API。"""
+
 router = APIRouter()
 
 
@@ -37,6 +39,7 @@ async def list_reports(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ReportListResponseSchema]:
+    """分页获取当前用户的报告列表。"""
     payload = await get_report_list(current_user.id, page, page_size, db)
     return success_response(payload)
 
@@ -57,6 +60,7 @@ async def report_detail(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ReportDetailResponseSchema]:
+    """获取单份报告详情。"""
     payload = await get_report_detail(report_id, current_user.id, db)
     return success_response(payload)
 
@@ -77,6 +81,7 @@ async def remove_report(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
+    """删除当前用户自己的报告。"""
     await delete_report(report_id, current_user.id, db)
     return success_response(None)
 

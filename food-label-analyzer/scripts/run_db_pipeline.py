@@ -22,8 +22,11 @@ from app.services.storage_service import StorageService
 from app.workers import llm_worker, ocr_worker, rag_worker, yolo_worker
 from app.workers.extractor import ingredient_extractor, nutrition_extractor
 
+"""本地落库版全链路调试脚本。"""
+
 
 async def create_test_user(db):
+    """获取或创建用于本地调试的测试用户。"""
     from sqlalchemy import select
 
     result = await db.execute(select(User).where(User.email == "test@example.com"))
@@ -42,6 +45,7 @@ async def create_test_user(db):
 
 
 def _pick_image() -> Path:
+    """从仓库 images 目录选择一张示例图片。"""
     images_dir = REPO_ROOT / "images"
     files = sorted(images_dir.glob("*.jpg"))
     if not files:
@@ -50,6 +54,7 @@ def _pick_image() -> Path:
 
 
 async def main():
+    """执行一次包含 MinIO 上传和数据库写入的完整调试流程。"""
     print("=" * 60)
     print("食品标签分析 - 落库测试")
     print("=" * 60)
@@ -171,6 +176,7 @@ async def main():
         try:
             user = await create_test_user(db)
 
+            # 调试脚本手工构造任务和报告，便于验证模型字段与数据库约束是否一致。
             task = AnalysisTask(
                 id=uuid4(),
                 user_id=user.id,
@@ -217,4 +223,3 @@ if __name__ == "__main__":
     import asyncio
 
     asyncio.run(main())
-

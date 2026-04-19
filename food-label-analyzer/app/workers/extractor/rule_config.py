@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+"""食品标签主题和配料拆分使用的正则规则配置。"""
+
 REGEX_FLAGS = re.IGNORECASE
 
 INGREDIENT_TEXT_LIMIT = 500
@@ -212,6 +214,7 @@ MANUFACTURER_GROUP_TOPICS = {"manufacturer"}
 
 
 def _compile_union(*parts: str, suffix: str = "") -> re.Pattern[str]:
+    """把多个正则片段合并为带命名锚点的匹配器。"""
     return re.compile(f"(?P<anchor>{'|'.join(parts)}){suffix}", REGEX_FLAGS)
 
 

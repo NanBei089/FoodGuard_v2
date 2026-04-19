@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimeStampMixin, UUIDPrimaryKeyMixin
 
+"""用户 ORM 模型。"""
+
 if TYPE_CHECKING:
     from app.models.analysis_task import AnalysisTask
     from app.models.password_reset import PasswordResetToken
@@ -17,6 +19,8 @@ if TYPE_CHECKING:
 
 
 class User(UUIDPrimaryKeyMixin, TimeStampMixin, Base):
+    """系统用户表，承载登录账号、资料和状态字段。"""
+
     __tablename__ = "users"
     __table_args__ = (
         Index("idx_users_is_active", "is_active"),
@@ -59,6 +63,7 @@ class User(UUIDPrimaryKeyMixin, TimeStampMixin, Base):
     )
 
     def __repr__(self) -> str:
+        """返回便于调试的用户摘要。"""
         return f"<User id={self.id} email={self.email}>"
 
 

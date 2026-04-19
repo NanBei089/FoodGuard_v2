@@ -20,12 +20,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimeStampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import NutritionParseSource
 
+"""分析报告 ORM 模型。"""
+
 if TYPE_CHECKING:
     from app.models.analysis_task import AnalysisTask
     from app.models.user import User
 
 
 class Report(UUIDPrimaryKeyMixin, TimeStampMixin, Base):
+    """分析完成后的报告记录，保存 OCR/RAG/LLM 结果与展示产物。"""
+
     __tablename__ = "reports"
     __table_args__ = (
         CheckConstraint("score >= 0 AND score <= 100", name="ck_reports_score_range"),

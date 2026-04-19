@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 from app.schemas.common import BASE_MODEL_CONFIG
 
+"""分析任务 API schema。"""
+
 STATUS_MESSAGES = {
     "queued": "任务排队中，请稍候...",
     "processing": "正在分析食品标签...",
@@ -28,10 +30,12 @@ NutritionParseSourceLiteral = Literal[
 
 
 def to_external_task_status(internal_status: str) -> str:
+    """把数据库内部状态映射为前端稳定状态。"""
     return INTERNAL_TO_EXTERNAL_STATUS.get(internal_status, internal_status)
 
 
 def sanitize_error_message(internal_error: str | None) -> str | None:
+    """把内部异常消息转换为用户可见的安全文案。"""
     if internal_error is None:
         return None
 
@@ -50,10 +54,14 @@ def sanitize_error_message(internal_error: str | None) -> str | None:
 
 
 class _AnalysisSchema(BaseModel):
+    """分析 schema 的公共基类。"""
+
     model_config = BASE_MODEL_CONFIG
 
 
 class TaskCreateResponse(_AnalysisSchema):
+    """创建任务后的响应。"""
+
     task_id: UUID = Field(description="任务 ID")
     status: Literal["queued"] = Field(
         default="queued", description="对外任务状态", examples=["queued"]
@@ -64,6 +72,8 @@ class TaskCreateResponse(_AnalysisSchema):
 
 
 class TaskStatusResponse(_AnalysisSchema):
+    """任务状态查询响应。"""
+
     task_id: UUID = Field(description="任务 ID")
     status: Literal["queued", "processing", "completed", "failed"] = Field(
         description="对外任务状态",

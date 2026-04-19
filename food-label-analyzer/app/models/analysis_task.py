@@ -11,12 +11,16 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimeStampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import TaskStatus
 
+"""分析任务 ORM 模型。"""
+
 if TYPE_CHECKING:
     from app.models.report import Report
     from app.models.user import User
 
 
 class AnalysisTask(UUIDPrimaryKeyMixin, TimeStampMixin, Base):
+    """用户上传图片后生成的异步分析任务。"""
+
     __tablename__ = "analysis_tasks"
     __table_args__ = (
         Index("idx_analysis_tasks_user_id", "user_id"),

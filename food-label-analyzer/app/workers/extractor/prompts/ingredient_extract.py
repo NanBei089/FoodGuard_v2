@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+"""配料提取 LLM prompt 模板。"""
+
 
 def build_ingredient_extract_prompt() -> str:
+    """构造配料表提取提示词。"""
     return """你是配料表提取助手。只返回合法 JSON 数组，不要输出任何解释文字。
 
 请从以下 OCR 文本中找出食品配料表，并将所有配料项展开为扁平字符串数组。

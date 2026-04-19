@@ -4,10 +4,11 @@ import logging
 
 import structlog
 
-# Example usage: logger = structlog.get_logger(__name__)
+"""结构化日志初始化。"""
 
 
 def setup_logging(log_level: str, log_format: str) -> None:
+    """配置标准库 logging 与 structlog 的统一输出格式。"""
     normalized_level = getattr(logging, log_level.upper(), logging.INFO)
     normalized_format = log_format.lower()
 
@@ -24,6 +25,7 @@ def setup_logging(log_level: str, log_format: str) -> None:
 
     renderer: structlog.types.Processor
     if normalized_format == "json":
+        # JSON 日志适合容器和集中式日志平台采集。
         renderer = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer()
@@ -43,6 +45,7 @@ def setup_logging(log_level: str, log_format: str) -> None:
     root_logger.addHandler(handler)
 
     for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+        # 让框架日志也走同一套 processor，便于按 request_id 聚合。
         named_logger = logging.getLogger(logger_name)
         named_logger.handlers.clear()
         named_logger.setLevel(normalized_level)

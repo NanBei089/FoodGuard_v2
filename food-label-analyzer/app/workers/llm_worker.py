@@ -17,6 +17,8 @@ from app.workers.extractor.prompts.food_health_analysis import (
     build_food_health_analysis_repair_prompt,
 )
 
+"""LLM Worker，负责把 OCR/RAG 结果整合为结构化食品健康分析 JSON。"""
+
 logger = structlog.get_logger(__name__)
 
 _client: OpenAI | None = None
@@ -24,6 +26,7 @@ _client_lock = threading.Lock()
 
 
 def _get_client() -> OpenAI:
+    """延迟初始化 OpenAI 兼容客户端。"""
     global _client
     if _client is None:
         with _client_lock:
@@ -39,6 +42,7 @@ def _get_client() -> OpenAI:
 
 
 def validate_configuration() -> None:
+    """校验 LLM 所需配置是否齐全。"""
     settings = get_settings()
     if not settings.DEEPSEEK_BASE_URL.strip():
         raise LLMServiceError("DEEPSEEK_BASE_URL is required")
@@ -50,10 +54,12 @@ def validate_configuration() -> None:
 
 
 def _validate_output(payload: dict[str, Any]) -> FoodHealthAnalysisOutput:
+    """对 LLM 输出执行 schema 校验。"""
     return FoodHealthAnalysisOutput.model_validate(payload)
 
 
 def _extract_message_content(response: Any) -> str:
+    """从 chat completion 响应中提取文本内容。"""
     choices = getattr(response, "choices", None)
     if not choices:
         raise LLMServiceError("LLM response did not include any choices")
@@ -64,6 +70,7 @@ def _extract_message_content(response: Any) -> str:
 
 
 def _extract_json_content(content: str) -> str:
+    """剥离 Markdown code fence，保留纯 JSON 文本。"""
     content = content.strip()
     if content.startswith("```json"):
         content = content[7:]
@@ -79,6 +86,7 @@ def _serialize_inputs(
     nutrition_json: dict[str, Any],
     rag_results_json: dict[str, Any],
 ) -> dict[str, str]:
+    """把多源输入序列化为提示词可直接插值的字符串。"""
     return {
         "other_ocr_raw_text": other_ocr_raw_text or "（无 OCR 文本）",
         "nutrition_json": json.dumps(nutrition_json, ensure_ascii=False, indent=2),
@@ -92,6 +100,11 @@ def analyze(
     rag_results_json: dict,
     rule_based_score: int | None = None,
 ) -> dict[str, Any]:
+    """执行食品健康分析主调用。
+
+    Returns:
+        dict[str, Any]: 通过 schema 校验后的结构化 JSON。
+    """
     validate_configuration()
     settings = get_settings()
     client = _get_client()
@@ -103,6 +116,7 @@ def analyze(
         if rule_based_score is not None
         else ""
     )
+    # 规则分是业务侧可解释约束，拼进 prompt 可以降低模型自由发挥导致的分数漂移。
     prompt_with_hint = prompt + score_hint
 
     start = time.time()
@@ -140,6 +154,7 @@ def _repair(
     previous_output: str,
     retry_count: int,
 ) -> dict[str, Any]:
+    """当主调用返回非法 JSON 时，触发修复式重试。"""
     settings = get_settings()
     max_repair = settings.DEEPSEEK_MAX_RETRIES
     if retry_count >= max_repair:

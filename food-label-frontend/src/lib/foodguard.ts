@@ -1,5 +1,6 @@
 import type { User } from '@/types/auth';
 
+/** 关注人群枚举到中文展示文案的映射。 */
 export const focusGroupLabels = {
   adult: '自己 / 成年人',
   child: '儿童',
@@ -23,11 +24,13 @@ export const healthConditionDescriptions: Record<string, string> = {
 };
 
 export function getUserInitial(user: Pick<User, 'display_name' | 'email'> | null): string {
+  /** 从昵称或邮箱中提取头像首字母。 */
   const raw = user?.display_name?.trim() || user?.email?.trim() || '';
   return raw.charAt(0).toUpperCase();
 }
 
 export function getScorePalette(score: number) {
+  /** 根据健康分返回统一的颜色和标签配置。 */
   if (score >= 80) {
     return {
       text: 'text-emerald-600',
@@ -61,12 +64,14 @@ export function getScorePalette(score: number) {
 }
 
 export function scoreRingOffset(score: number): number {
+  /** 将健康分转换为 SVG 圆环 strokeDashoffset。 */
   const normalizedScore = Math.max(0, Math.min(score, 100));
   const circumference = 283;
   return circumference - (normalizedScore / 100) * circumference;
 }
 
 export function getHazardLevelLabel(level: string): string {
+  /** 将后端风险等级转换为中文文案。 */
   if (level === 'high') {
     return '高风险';
   }
@@ -77,6 +82,7 @@ export function getHazardLevelLabel(level: string): string {
 }
 
 export function getIngredientRiskMeta(risk: string) {
+  /** 根据配料风险等级返回样式元信息。 */
   if (risk === 'danger') {
     return {
       label: '高风险',
@@ -104,6 +110,7 @@ export function getIngredientRiskMeta(risk: string) {
 }
 
 export function formatReportDate(value: string): string {
+  /** 格式化报告创建时间。 */
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -119,6 +126,7 @@ export function formatReportDate(value: string): string {
 }
 
 export function normalizeNutritionEntries(nutrition: Record<string, unknown> | null | undefined) {
+  /** 把营养键值对象转换为非空 entries，便于列表渲染。 */
   return Object.entries(nutrition ?? {}).filter(([, value]) => {
     if (value === null || value === undefined) {
       return false;
@@ -128,6 +136,7 @@ export function normalizeNutritionEntries(nutrition: Record<string, unknown> | n
 }
 
 export function getNutritionParseSourceLabel(source: string | null | undefined): string {
+  /** 将营养解析来源转换为前端展示文案。 */
   if (source === 'table_recognition') {
     return '表格识别';
   }
@@ -141,6 +150,7 @@ export function getNutritionParseSourceLabel(source: string | null | undefined):
 }
 
 export function getNutritionLevelMeta(level: string) {
+  /** 根据营养行等级返回展示样式。 */
   if (level === 'warning') {
     return {
       badgeClass: 'bg-rose-100 text-rose-600',
@@ -181,6 +191,7 @@ export function summarizePreferences(
   healthConditions: string[] = [],
   allergies: string[] = [],
 ) {
+  /** 把用户偏好编码转换为中文摘要。 */
   return {
     focusGroups: focusGroups.map((item) => focusGroupLabels[item as keyof typeof focusGroupLabels] ?? item),
     healthConditions: healthConditions.map(

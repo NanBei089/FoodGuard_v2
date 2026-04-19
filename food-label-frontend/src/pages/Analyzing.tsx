@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { apiClient } from '@/api/client';
 import type { ApiResponse } from '@/types/api';
 
+/** 分析轮询页使用的任务状态结构。 */
 interface TaskStatus {
   task_id: string;
   status: 'queued' | 'processing' | 'completed' | 'failed';
@@ -14,12 +15,14 @@ interface TaskStatus {
 }
 
 function revokePreview(url: string | null) {
+  /** 释放分析页临时预览图并清理 sessionStorage。 */
   if (url && url.startsWith('blob:')) {
     URL.revokeObjectURL(url);
   }
   sessionStorage.removeItem('latest_upload_preview');
 }
 
+/** 分析进行页，负责轮询任务状态并在完成后跳转到报告页。 */
 export default function Analyzing() {
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
@@ -60,6 +63,7 @@ export default function Analyzing() {
           return;
         }
 
+        // 随着轮询持续拉长间隔，既能减轻后端压力，也能避免前端页面过于频繁刷新。
         pollInterval = Math.min(pollInterval + 500, 3000);
         timeoutId = setTimeout(checkStatus, pollInterval);
       } catch {
@@ -181,6 +185,7 @@ function Step({
   status: 'pending' | 'processing' | 'completed';
   stepNum: number;
 }) {
+  /** 渲染单个分析阶段的状态指示。 */
   return (
     <div
       className={`flex items-center gap-3 transition-opacity duration-300 ${

@@ -28,6 +28,8 @@ from app.services.auth_service import (
     send_reset_email,
 )
 
+"""认证与账号安全相关 API。"""
+
 router = APIRouter()
 
 
@@ -48,6 +50,16 @@ async def register_send_code(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> ApiResponse[CooldownResponse]:
+    """发送注册验证码。
+
+    Params:
+        request: 注册验证码请求体。
+        db: 数据库会话。
+        redis: Redis 客户端。
+
+    Returns:
+        ApiResponse[CooldownResponse]: 当前冷却时间。
+    """
     cooldown_seconds = await send_register_code(request.email, db, redis)
     return success_response(
         CooldownResponse(cooldown_seconds=cooldown_seconds),
@@ -70,6 +82,15 @@ async def register(
     request: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
+    """完成用户注册。
+
+    Params:
+        request: 注册表单。
+        db: 数据库会话。
+
+    Returns:
+        ApiResponse[None]: 标准成功响应。
+    """
     await register_user(request.email, request.code, request.password, db)
     return success_response(None, message="注册成功")
 
@@ -89,6 +110,7 @@ async def login(
     request: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[TokenResponse]:
+    """执行邮箱密码登录并签发 token。"""
     tokens = await login_user(request.email, request.password, db)
     return success_response(tokens)
 
@@ -107,6 +129,7 @@ async def refresh(
     request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[TokenResponse]:
+    """使用 refresh token 轮换一组新的访问凭证。"""
     tokens = await refresh_tokens(request.refresh_token, db)
     return success_response(tokens)
 
@@ -125,6 +148,7 @@ async def logout(
     request: LogoutRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
+    """注销当前 refresh token。"""
     await logout_user(request.refresh_token, db)
     return success_response(None)
 
@@ -145,6 +169,7 @@ async def forgot_password(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ) -> ApiResponse[None]:
+    """触发密码重置邮件流程。"""
     await send_reset_email(request.email, db, redis)
     return success_response(None, message="如果账号存在，重置邮件已发送")
 
@@ -163,6 +188,7 @@ async def reset_password_endpoint(
     request: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
+    """根据重置令牌更新用户密码。"""
     await reset_password(request.token, request.new_password, db)
     return success_response(None, message="密码已重置")
 

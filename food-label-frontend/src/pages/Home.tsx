@@ -14,8 +14,10 @@ import { useAuthStore } from '@/store/auth';
 import { summarizePreferences } from '@/lib/foodguard';
 import type { ApiResponse } from '@/types/api';
 
+/** 上传页的分析请求超时时间，考虑到后端可能先完成对象存储和任务入队。 */
 const ANALYSIS_UPLOAD_TIMEOUT_MS = 120000;
 
+/** 首页上传页，负责图片选择、预览和分析任务创建。 */
 export default function Home() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +52,7 @@ export default function Home() {
       }, 150);
     };
 
+    // 文件选择器关闭后浏览器会重新 focus 页面，利用这个时机自动收起提示文案。
     window.addEventListener('focus', handleWindowFocus);
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
@@ -79,6 +82,7 @@ export default function Home() {
       return;
     }
 
+    // 先清空 input value，确保连续选择同一张图时依然能触发 change 事件。
     fileInputRef.current.value = '';
     showPickerHint();
     fileInputRef.current.click();
@@ -110,6 +114,7 @@ export default function Home() {
     }
 
     if (previewUrl) {
+      // 每次替换预览图时及时回收旧 blob URL，避免页面反复试用后内存泄漏。
       URL.revokeObjectURL(previewUrl);
     }
 
@@ -163,6 +168,7 @@ export default function Home() {
 
     try {
       const analyzingPreviewUrl = URL.createObjectURL(file);
+      // 轮询页需要继续展示刚上传的预览图，因此临时存进 sessionStorage。
       sessionStorage.setItem('latest_upload_preview', analyzingPreviewUrl);
 
       const res = await apiClient.post<any, ApiResponse<{ task_id: string }>>(

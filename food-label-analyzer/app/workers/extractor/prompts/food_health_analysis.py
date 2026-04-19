@@ -6,8 +6,11 @@ from app.schemas.analysis_data import (
     IngredientItem,
 )
 
+"""食品健康分析 LLM prompt 模板。"""
+
 
 def build_food_health_analysis_prompt() -> str:
+    """构造食品健康分析主提示词。"""
     return """你是食品安全分析专家，精通中国食品法规（GB2760-2024 等）。
 请根据食品标签 OCR 文本、营养成分数据和 RAG 检索结果，生成结构化的食品健康分析报告。
 
@@ -51,6 +54,7 @@ def build_food_health_analysis_prompt() -> str:
 
 
 def build_food_health_analysis_repair_prompt() -> str:
+    """构造 LLM 输出修复提示词。"""
     return """你是 JSON 修复助手。之前的输出没有通过格式校验，请只返回修正后的合法 JSON。
 
 严格遵守以下 JSON 输出格式，禁止返回任何额外文字：
